@@ -15,6 +15,7 @@ public partial class MainWindow
 {
     private Button? _capturingHotkeyButton;
     private string? _capturingHotkeyName;
+    private System.Windows.Threading.DispatcherTimer? _captureTimeout;
 
     private void SettingsView_Loaded(object sender, RoutedEventArgs e)
     {
@@ -98,6 +99,14 @@ public partial class MainWindow
 
         // The global hotkey would otherwise eat this very combination.
         (Application.Current as App)?.SuspendHotkeys();
+
+        _captureTimeout?.Stop();
+        _captureTimeout = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(9)
+        };
+        _captureTimeout.Tick += (_, _) => FinishHotkeyCapture(null);
+        _captureTimeout.Start();
         button.Content = Loc.T("Settings.PressKeys");
         button.Focus();
         Keyboard.Focus(button);
@@ -113,10 +122,19 @@ public partial class MainWindow
         e.Handled = true;
 
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
+
         if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
-            or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin or Key.None)
+            or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)
         {
             return; // waiting for the non-modifier key
+        }
+
+        if (key == Key.None)
+        {
+            // Keys produced by Fn / vendor drivers often arrive with no usable virtual key,
+            // so they cannot be registered. Say so instead of looking stuck.
+            _capturingHotkeyButton.Content = Loc.T("Settings.KeyUnsupported");
+            return;
         }
 
         if (key == Key.Escape)
@@ -176,6 +194,8 @@ public partial class MainWindow
         var name = _capturingHotkeyName;
         _capturingHotkeyButton = null;
         _capturingHotkeyName = null;
+        _captureTimeout?.Stop();
+        _captureTimeout = null;
 
         if (button is null || DataContext is not MainViewModel viewModel)
         {

@@ -90,6 +90,7 @@
     <sys:String x:Key="Settings.HotkeyClear">Clear this binding</sys:String>
     <sys:String x:Key="Settings.HotkeyUnset">Not set</sys:String>
     <sys:String x:Key="Settings.NeedModifier">Hold a modifier</sys:String>
+    <sys:String x:Key="Settings.KeyUnsupported">That key cannot be registered — use F-keys, letters or numbers</sys:String>
     <sys:String x:Key="Settings.Hotkeys">Hotkeys</sys:String>
     <sys:String x:Key="Settings.HotkeysHint">Click a button, then press the key combination you want (modifier + key). Esc cancels.</sys:String>
     <sys:String x:Key="Settings.HotkeySave">Save the last seconds</sys:String>
