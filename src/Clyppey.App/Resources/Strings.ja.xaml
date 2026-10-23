@@ -1,0 +1,140 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+    <sys:String x:Key="App.Title">Clyppey</sys:String>
+    <sys:String x:Key="App.Tagline">インスタントリプレイ</sys:String>
+    <sys:String x:Key="Header.Minimize">トレイに最小化</sys:String>
+    <sys:String x:Key="Header.Close">閉じる — 録画はトレイで続きます</sys:String>
+
+    <sys:String x:Key="Nav.Home">ホーム</sys:String>
+    <sys:String x:Key="Nav.Settings">設定</sys:String>
+    <sys:String x:Key="Nav.History">履歴</sys:String>
+    <sys:String x:Key="Nav.Diagnostics">診断</sys:String>
+
+    <sys:String x:Key="State.Stopped">停止中</sys:String>
+    <sys:String x:Key="State.StoppedDetail">開始すると直前のプレイを保存できるようになります</sys:String>
+    <sys:String x:Key="State.Buffering">待機中</sys:String>
+    <sys:String x:Key="State.BufferingDetail">直近 {0} 秒分をメモリに保持しています</sys:String>
+    <sys:String x:Key="State.Recording">録画中</sys:String>
+    <sys:String x:Key="State.RecordingDetail">{0} 秒経過</sys:String>
+    <sys:String x:Key="State.Saving">保存中…</sys:String>
+    <sys:String x:Key="State.SavingDetail">ファイルを書き出しています</sys:String>
+    <sys:String x:Key="State.Error">エラー</sys:String>
+    <sys:String x:Key="State.ErrorDetail">診断ページを確認してください</sys:String>
+
+    <sys:String x:Key="Hero.SaveLast">{0} 秒</sys:String>
+    <sys:String x:Key="Hero.Explain">ホットキーを押すと、{0} 秒前までのプレイがそのままファイルになります。再エンコードしないので 1 秒以内に保存が終わります。</sys:String>
+    <sys:String x:Key="Hero.Buffered">たまっている量</sys:String>
+    <sys:String x:Key="Hero.Of">{0} / {1} 秒</sys:String>
+    <sys:String x:Key="Hero.Memory">メモリを約 {0} MB 使います</sys:String>
+    <sys:String x:Key="Hero.Warming">起動中…</sys:String>
+
+    <sys:String x:Key="Action.Save">今すぐ保存</sys:String>
+    <sys:String x:Key="Action.RecordStart">録画を開始</sys:String>
+    <sys:String x:Key="Action.RecordStop">録画を停止</sys:String>
+    <sys:String x:Key="Action.BufferStart">バッファを開始</sys:String>
+    <sys:String x:Key="Action.BufferStop">バッファを停止</sys:String>
+    <sys:String x:Key="Action.OpenFolder">フォルダを開く</sys:String>
+
+    <sys:String x:Key="Stats.CaptureFps">キャプチャ FPS</sys:String>
+    <sys:String x:Key="Stats.Dropped">ドロップ</sys:String>
+    <sys:String x:Key="Stats.Cpu">CPU</sys:String>
+    <sys:String x:Key="Stats.Gpu">GPU エンコーダ</sys:String>
+    <sys:String x:Key="Stats.Bitrate">ビットレート</sys:String>
+    <sys:String x:Key="Stats.Resolution">解像度</sys:String>
+    <sys:String x:Key="Stats.DesktopAudio">ゲーム音声</sys:String>
+    <sys:String x:Key="Stats.Microphone">マイク</sys:String>
+    <sys:String x:Key="Stats.Memory">メモリ</sys:String>
+
+    <sys:String x:Key="Clips.Recent">最近のクリップ</sys:String>
+    <sys:String x:Key="Clips.Empty">まだクリップがありません。プレイ中に保存ホットキーを押してください。</sys:String>
+    <sys:String x:Key="Clips.History">クリップ履歴</sys:String>
+    <sys:String x:Key="Clips.EmptyAll">まだクリップがありません。</sys:String>
+    <sys:String x:Key="Clips.Open">開く</sys:String>
+    <sys:String x:Key="Clips.Folder">フォルダ</sys:String>
+    <sys:String x:Key="Clips.Delete">削除</sys:String>
+    <sys:String x:Key="Clips.ModeReplay">インスタントリプレイ</sys:String>
+    <sys:String x:Key="Clips.ModeRecord">録画</sys:String>
+
+    <sys:String x:Key="Settings.Title">設定</sys:String>
+    <sys:String x:Key="Settings.Screen">画面</sys:String>
+    <sys:String x:Key="Settings.Monitor">キャプチャする画面</sys:String>
+    <sys:String x:Key="Settings.MonitorHint">下の画像が実際に録画される画面です。</sys:String>
+    <sys:String x:Key="Settings.Fps">フレームレート</sys:String>
+    <sys:String x:Key="Settings.Length">何秒前まで保存しますか？</sys:String>
+    <sys:String x:Key="Settings.LengthHint">保存キーを押すと、この秒数だけ過去にさかのぼって保存します。長くするほどメモリを使います。</sys:String>
+    <sys:String x:Key="Settings.MemoryNote">メモリを約 {0} MB 使います</sys:String>
+    <sys:String x:Key="Settings.BufferOnDisk">メモリを節約する（バッファをディスクに保存）</sys:String>
+    <sys:String x:Key="Settings.BufferOnDiskHint">NVIDIA のリプレイと同じ方式。メモリ使用量が設定した長さに比例しなくなります。</sys:String>
+    <sys:String x:Key="Settings.Preset">画質プリセット</sys:String>
+    <sys:String x:Key="Settings.Quality">クリップの画質</sys:String>
+    <sys:String x:Key="Settings.QualityLow">小さめ</sys:String>
+    <sys:String x:Key="Settings.QualityStandard">標準</sys:String>
+    <sys:String x:Key="Settings.QualityHigh">高画質</sys:String>
+    <sys:String x:Key="Settings.QualityMax">最高</sys:String>
+    <sys:String x:Key="Settings.Audio">音声</sys:String>
+    <sys:String x:Key="Settings.DesktopAudioOn">ゲーム・デスクトップの音を録音する</sys:String>
+    <sys:String x:Key="Settings.MicrophoneOn">マイクの音も録音する</sys:String>
+    <sys:String x:Key="Settings.MicDevice">使用するマイク</sys:String>
+    <sys:String x:Key="Settings.MicVolume">マイクの音量</sys:String>
+    <sys:String x:Key="Settings.MicDelay">マイクの遅れ補正</sys:String>
+    <sys:String x:Key="Settings.MicLevel">マイクのメーター</sys:String>
+    <sys:String x:Key="Settings.NoMicrophone">マイクが見つかりません</sys:String>
+    <sys:String x:Key="Settings.Output">クリップの保存先</sys:String>
+    <sys:String x:Key="Settings.OutputHint">空欄のままにすると「ビデオ」フォルダに保存します。</sys:String>
+    <sys:String x:Key="Settings.OutputNotWritable">このフォルダには書き込めません。クリップは {0} に保存しています</sys:String>
+    <sys:String x:Key="Toast.OutputFallback">指定したフォルダに書き込めないため、クリップは {0} に保存します</sys:String>
+    <sys:String x:Key="Settings.Browse">参照…</sys:String>
+    <sys:String x:Key="Settings.PressKeys">キーを押してください…</sys:String>
+    <sys:String x:Key="Settings.Hotkeys">ホットキー</sys:String>
+    <sys:String x:Key="Settings.HotkeysHint">ボタンを押してから、割り当てたいキーを押してください（修飾キー＋キー）。Esc で取り消し。</sys:String>
+    <sys:String x:Key="Settings.HotkeySave">直近を保存</sys:String>
+    <sys:String x:Key="Settings.HotkeyRecord">録画の開始 / 停止</sys:String>
+    <sys:String x:Key="Settings.HotkeyBuffer">バッファの開始 / 停止</sys:String>
+    <sys:String x:Key="Settings.Advanced">詳細設定</sys:String>
+    <sys:String x:Key="Settings.Codec">コーデック</sys:String>
+    <sys:String x:Key="Settings.RateControl">レート制御</sys:String>
+    <sys:String x:Key="Settings.Bitrate">ビットレートを手動指定</sys:String>
+    <sys:String x:Key="Settings.QualityLevel">品質レベル</sys:String>
+    <sys:String x:Key="Settings.MemoryCap">メモリ上限</sys:String>
+    <sys:String x:Key="Settings.Behaviour">起動と動作</sys:String>
+    <sys:String x:Key="Settings.AutoStartWindows">Windows 起動時に自動で開始</sys:String>
+    <sys:String x:Key="Settings.StartMinimized">最小化した状態で起動する</sys:String>
+    <sys:String x:Key="Settings.AutoBuffer">起動と同時にバッファを開始する</sys:String>
+    <sys:String x:Key="Settings.Sound">保存時に効果音を鳴らす</sys:String>
+    <sys:String x:Key="Settings.OpenOnSave">保存後にエクスプローラーで表示する</sys:String>
+    <sys:String x:Key="Settings.SyncOffset">音声のずれ補正</sys:String>
+    <sys:String x:Key="Settings.Language">表示言語</sys:String>
+    <sys:String x:Key="Settings.Saved">保存しました</sys:String>
+
+    <sys:String x:Key="Diag.Title">動作環境とログ</sys:String>
+    <sys:String x:Key="Diag.Redetect">再診断</sys:String>
+    <sys:String x:Key="Diag.OpenLog">ログファイルを開く</sys:String>
+    <sys:String x:Key="Diag.OpenData">設定フォルダを開く</sys:String>
+    <sys:String x:Key="Diag.Encoders">エンコーダ / ffmpeg</sys:String>
+    <sys:String x:Key="Diag.EncoderDirect">OK (GPU直結)</sys:String>
+    <sys:String x:Key="Diag.EncoderCpu">OK (CPU経由)</sys:String>
+    <sys:String x:Key="Diag.EncoderUnavailable">利用不可</sys:String>
+    <sys:String x:Key="Diag.Log">ログ</sys:String>
+
+    <sys:String x:Key="Toast.Saved">保存しました · {0} 秒 · {1} MB</sys:String>
+    <sys:String x:Key="Toast.SavedTo">保存先: {0}</sys:String>
+    <sys:String x:Key="Toast.SaveFailed">保存できませんでした: {0}</sys:String>
+    <sys:String x:Key="Toast.RecordSaved">録画を保存しました · {0} 秒</sys:String>
+    <sys:String x:Key="Toast.HotkeyRemapped">他のアプリが既定のキーを使用中のため切り替えました: {0}</sys:String>
+    <sys:String x:Key="Toast.HotkeyFailed">次のホットキーを登録できませんでした: {0}</sys:String>
+    <sys:String x:Key="Toast.FolderFailed">フォルダを開けませんでした。パスをコピーしました。</sys:String>
+    <sys:String x:Key="Toast.Deleted">クリップを削除しました</sys:String>
+    <sys:String x:Key="Toast.EncoderFailed">エンコーダが停止しました: {0}</sys:String>
+    <sys:String x:Key="Toast.NeedEncoder">利用可能なエンコーダが見つかりませんでした。</sys:String>
+    <sys:String x:Key="Toast.NeedEncoderHint">診断ページで詳細を確認してください。</sys:String>
+
+    <sys:String x:Key="Common.Unknown">—</sys:String>
+    <sys:String x:Key="Common.NotAvailable">n/a</sys:String>
+    <sys:String x:Key="Common.On">オン</sys:String>
+    <sys:String x:Key="Common.Off">オフ</sys:String>
+    <sys:String x:Key="Common.SecondsValue">{0} 秒</sys:String>
+    <sys:String x:Key="Common.SecondsShort">{0} 秒</sys:String>
+
+</ResourceDictionary>

@@ -1,0 +1,41 @@
+# ffmpeg/obj/bin and local state
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# bundled ffmpeg (fetched by scripts/setup-ffmpeg.ps1)
+tools/ffmpeg/*.exe
+
+# scratch
+.tmp_test/
+.tmp_whl/
+tools/_dl/
+tools/_extract*/
+ClyppeyData/
+
+# local scratch
+.avtest/
+.av/
+.probe/
+.tmp_ui/
+.tmp_v2/
+.tmpprobe/
+*.mp4
+.set_*.png
+.shot_*.png
+.min.png
+.fancy.png
+.installed.png
+.disk.mp4
+
+# scratch screenshots at the repo root (docs/images is kept)
+/*.png
+
+# developer-only / build output
+AGENTS.md
+dist/
+
+# screenshots of the real desktop are never published
+docs/images/

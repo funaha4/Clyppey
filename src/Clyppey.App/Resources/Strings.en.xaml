@@ -1,0 +1,140 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+    <sys:String x:Key="App.Title">Clyppey</sys:String>
+    <sys:String x:Key="App.Tagline">INSTANT REPLAY</sys:String>
+    <sys:String x:Key="Header.Minimize">Minimise to the tray</sys:String>
+    <sys:String x:Key="Header.Close">Close — recording continues in the tray</sys:String>
+
+    <sys:String x:Key="Nav.Home">Home</sys:String>
+    <sys:String x:Key="Nav.Settings">Settings</sys:String>
+    <sys:String x:Key="Nav.History">History</sys:String>
+    <sys:String x:Key="Nav.Diagnostics">Diagnostics</sys:String>
+
+    <sys:String x:Key="State.Stopped">Not recording</sys:String>
+    <sys:String x:Key="State.StoppedDetail">Press start to begin replay buffering</sys:String>
+    <sys:String x:Key="State.Buffering">Ready</sys:String>
+    <sys:String x:Key="State.BufferingDetail">Holding the last {0} seconds in memory</sys:String>
+    <sys:String x:Key="State.Recording">Recording</sys:String>
+    <sys:String x:Key="State.RecordingDetail">Recording for {0} seconds</sys:String>
+    <sys:String x:Key="State.Saving">Saving…</sys:String>
+    <sys:String x:Key="State.SavingDetail">Writing the file, almost done</sys:String>
+    <sys:String x:Key="State.Error">Error</sys:String>
+    <sys:String x:Key="State.ErrorDetail">Check the diagnostics page</sys:String>
+
+    <sys:String x:Key="Hero.SaveLast">{0} s</sys:String>
+    <sys:String x:Key="Hero.Explain">When you press the hotkey, the last {0} seconds of gameplay are written to a file. Nothing is re-encoded, so it is ready in under a second.</sys:String>
+    <sys:String x:Key="Hero.Buffered">Buffered</sys:String>
+    <sys:String x:Key="Hero.Of">{0} / {1} s</sys:String>
+    <sys:String x:Key="Hero.Memory">About {0} MB of RAM</sys:String>
+    <sys:String x:Key="Hero.Warming">Starting…</sys:String>
+
+    <sys:String x:Key="Action.Save">Save now</sys:String>
+    <sys:String x:Key="Action.RecordStart">Start recording</sys:String>
+    <sys:String x:Key="Action.RecordStop">Stop recording</sys:String>
+    <sys:String x:Key="Action.BufferStart">Start buffering</sys:String>
+    <sys:String x:Key="Action.BufferStop">Stop buffering</sys:String>
+    <sys:String x:Key="Action.OpenFolder">Open folder</sys:String>
+
+    <sys:String x:Key="Stats.CaptureFps">Capture FPS</sys:String>
+    <sys:String x:Key="Stats.Dropped">Dropped</sys:String>
+    <sys:String x:Key="Stats.Cpu">CPU</sys:String>
+    <sys:String x:Key="Stats.Gpu">GPU encoder</sys:String>
+    <sys:String x:Key="Stats.Bitrate">Bitrate</sys:String>
+    <sys:String x:Key="Stats.Resolution">Resolution</sys:String>
+    <sys:String x:Key="Stats.DesktopAudio">Game audio</sys:String>
+    <sys:String x:Key="Stats.Microphone">Microphone</sys:String>
+    <sys:String x:Key="Stats.Memory">RAM</sys:String>
+
+    <sys:String x:Key="Clips.Recent">Recent clips</sys:String>
+    <sys:String x:Key="Clips.Empty">No clips yet — press the save hotkey while playing.</sys:String>
+    <sys:String x:Key="Clips.History">Clip history</sys:String>
+    <sys:String x:Key="Clips.EmptyAll">No clips yet.</sys:String>
+    <sys:String x:Key="Clips.Open">Open</sys:String>
+    <sys:String x:Key="Clips.Folder">Folder</sys:String>
+    <sys:String x:Key="Clips.Delete">Delete</sys:String>
+    <sys:String x:Key="Clips.ModeReplay">Instant replay</sys:String>
+    <sys:String x:Key="Clips.ModeRecord">Recording</sys:String>
+
+    <sys:String x:Key="Settings.Title">Settings</sys:String>
+    <sys:String x:Key="Settings.Screen">Screen</sys:String>
+    <sys:String x:Key="Settings.Monitor">What to capture</sys:String>
+    <sys:String x:Key="Settings.MonitorHint">The picture below is what will be recorded.</sys:String>
+    <sys:String x:Key="Settings.Fps">Frame rate</sys:String>
+    <sys:String x:Key="Settings.Length">How far back can you save?</sys:String>
+    <sys:String x:Key="Settings.LengthHint">Press the save hotkey and you get the last N seconds. A longer buffer uses more RAM.</sys:String>
+    <sys:String x:Key="Settings.MemoryNote">Uses about {0} MB of RAM</sys:String>
+    <sys:String x:Key="Settings.BufferOnDisk">Save the buffer to disk to keep RAM low</sys:String>
+    <sys:String x:Key="Settings.BufferOnDiskHint">Same approach as NVIDIA's replay: RAM no longer grows with the buffer length.</sys:String>
+    <sys:String x:Key="Settings.Preset">Quality preset</sys:String>
+    <sys:String x:Key="Settings.Quality">Clip quality</sys:String>
+    <sys:String x:Key="Settings.QualityLow">Small</sys:String>
+    <sys:String x:Key="Settings.QualityStandard">Balanced</sys:String>
+    <sys:String x:Key="Settings.QualityHigh">High</sys:String>
+    <sys:String x:Key="Settings.QualityMax">Maximum</sys:String>
+    <sys:String x:Key="Settings.Audio">Sound</sys:String>
+    <sys:String x:Key="Settings.DesktopAudioOn">Record game / desktop audio</sys:String>
+    <sys:String x:Key="Settings.MicrophoneOn">Record microphone</sys:String>
+    <sys:String x:Key="Settings.MicDevice">Microphone device</sys:String>
+    <sys:String x:Key="Settings.MicVolume">Microphone volume</sys:String>
+    <sys:String x:Key="Settings.MicDelay">Microphone delay correction</sys:String>
+    <sys:String x:Key="Settings.MicLevel">Microphone level</sys:String>
+    <sys:String x:Key="Settings.NoMicrophone">No microphone found</sys:String>
+    <sys:String x:Key="Settings.Output">Where clips are saved</sys:String>
+    <sys:String x:Key="Settings.OutputHint">Leave empty to use your Videos folder.</sys:String>
+    <sys:String x:Key="Settings.OutputNotWritable">This folder is not writable — clips are being saved to {0}</sys:String>
+    <sys:String x:Key="Toast.OutputFallback">The chosen folder is not writable. Clips are saved to {0}</sys:String>
+    <sys:String x:Key="Settings.Browse">Browse…</sys:String>
+    <sys:String x:Key="Settings.PressKeys">Press keys…</sys:String>
+    <sys:String x:Key="Settings.Hotkeys">Hotkeys</sys:String>
+    <sys:String x:Key="Settings.HotkeysHint">Click a button, then press the key combination you want (modifier + key). Esc cancels.</sys:String>
+    <sys:String x:Key="Settings.HotkeySave">Save the last seconds</sys:String>
+    <sys:String x:Key="Settings.HotkeyRecord">Start / stop recording</sys:String>
+    <sys:String x:Key="Settings.HotkeyBuffer">Start / stop buffering</sys:String>
+    <sys:String x:Key="Settings.Advanced">Advanced</sys:String>
+    <sys:String x:Key="Settings.Codec">Codec</sys:String>
+    <sys:String x:Key="Settings.RateControl">Rate control</sys:String>
+    <sys:String x:Key="Settings.Bitrate">Manual bitrate</sys:String>
+    <sys:String x:Key="Settings.QualityLevel">Quality level</sys:String>
+    <sys:String x:Key="Settings.MemoryCap">RAM limit</sys:String>
+    <sys:String x:Key="Settings.Behaviour">Startup and behaviour</sys:String>
+    <sys:String x:Key="Settings.AutoStartWindows">Start with Windows</sys:String>
+    <sys:String x:Key="Settings.StartMinimized">Start minimised in the tray</sys:String>
+    <sys:String x:Key="Settings.AutoBuffer">Start buffering when Clyppey launches</sys:String>
+    <sys:String x:Key="Settings.Sound">Play a sound when a clip is saved</sys:String>
+    <sys:String x:Key="Settings.OpenOnSave">Show the clip in Explorer after saving</sys:String>
+    <sys:String x:Key="Settings.SyncOffset">Audio sync offset</sys:String>
+    <sys:String x:Key="Settings.Language">Language</sys:String>
+    <sys:String x:Key="Settings.Saved">Saved</sys:String>
+
+    <sys:String x:Key="Diag.Title">Environment and log</sys:String>
+    <sys:String x:Key="Diag.Redetect">Re-check</sys:String>
+    <sys:String x:Key="Diag.OpenLog">Open log file</sys:String>
+    <sys:String x:Key="Diag.OpenData">Open settings folder</sys:String>
+    <sys:String x:Key="Diag.Encoders">Encoders / ffmpeg</sys:String>
+    <sys:String x:Key="Diag.EncoderDirect">OK (GPU direct)</sys:String>
+    <sys:String x:Key="Diag.EncoderCpu">OK (via CPU)</sys:String>
+    <sys:String x:Key="Diag.EncoderUnavailable">unavailable</sys:String>
+    <sys:String x:Key="Diag.Log">Log</sys:String>
+
+    <sys:String x:Key="Toast.Saved">Saved · {0} s · {1} MB</sys:String>
+    <sys:String x:Key="Toast.SavedTo">Saved to {0}</sys:String>
+    <sys:String x:Key="Toast.SaveFailed">Could not save: {0}</sys:String>
+    <sys:String x:Key="Toast.RecordSaved">Recording saved · {0} s</sys:String>
+    <sys:String x:Key="Toast.HotkeyRemapped">Another app owns the default keys — now using {0}</sys:String>
+    <sys:String x:Key="Toast.HotkeyFailed">These hotkeys could not be registered: {0}</sys:String>
+    <sys:String x:Key="Toast.FolderFailed">Could not open the folder — the path was copied to the clipboard.</sys:String>
+    <sys:String x:Key="Toast.Deleted">Clip deleted</sys:String>
+    <sys:String x:Key="Toast.EncoderFailed">The encoder stopped: {0}</sys:String>
+    <sys:String x:Key="Toast.NeedEncoder">No usable encoder was found on this machine.</sys:String>
+    <sys:String x:Key="Toast.NeedEncoderHint">See the Diagnostics page for details.</sys:String>
+
+    <sys:String x:Key="Common.Unknown">—</sys:String>
+    <sys:String x:Key="Common.NotAvailable">n/a</sys:String>
+    <sys:String x:Key="Common.On">On</sys:String>
+    <sys:String x:Key="Common.Off">Off</sys:String>
+    <sys:String x:Key="Common.SecondsValue">{0} seconds</sys:String>
+    <sys:String x:Key="Common.SecondsShort">{0} s</sys:String>
+
+</ResourceDictionary>

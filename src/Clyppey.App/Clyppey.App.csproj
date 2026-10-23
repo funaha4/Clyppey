@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>Clyppey.App</RootNamespace>
+    <AssemblyName>Clyppey</AssemblyName>
+    <ApplicationIcon>Assets\clyppey.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Clyppey.Core\Clyppey.Core.csproj" />
+  </ItemGroup>
+  <!-- WinForms support is only needed for the tray icon; its implicit global usings collide
+       with the WPF types (Application, Brush, Color...), so they are removed here. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\clyppey.ico" />
+  </ItemGroup>
+</Project>

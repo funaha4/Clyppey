@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Clyppey.Cli</RootNamespace>
+    <AssemblyName>clyppey</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Clyppey.Core\Clyppey.Core.csproj" />
+  </ItemGroup>
+</Project>
