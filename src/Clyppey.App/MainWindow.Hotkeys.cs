@@ -41,20 +41,49 @@ public partial class MainWindow
             return;
         }
 
+        var unset = Loc.T("Settings.HotkeyUnset");
         if (HotkeySaveButton is not null)
         {
-            HotkeySaveButton.Content = viewModel.Settings.HotkeySaveReplay;
+            HotkeySaveButton.Content = Display(viewModel.Settings.HotkeySaveReplay, unset);
         }
 
         if (HotkeyRecordButton is not null)
         {
-            HotkeyRecordButton.Content = viewModel.Settings.HotkeyToggleRecord;
+            HotkeyRecordButton.Content = Display(viewModel.Settings.HotkeyToggleRecord, unset);
         }
 
         if (HotkeyBufferButton is not null)
         {
-            HotkeyBufferButton.Content = viewModel.Settings.HotkeyToggleBuffer;
+            HotkeyBufferButton.Content = Display(viewModel.Settings.HotkeyToggleBuffer, unset);
         }
+    }
+
+    private static string Display(string? combination, string unset) =>
+        string.IsNullOrWhiteSpace(combination) ? unset : combination;
+
+    /// <summary>Removes a binding entirely.</summary>
+    private void ClearHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || DataContext is not MainViewModel viewModel)
+        {
+            return;
+        }
+
+        switch (button.Tag as string)
+        {
+            case "Save":
+                viewModel.Settings.HotkeySaveReplay = string.Empty;
+                break;
+            case "Record":
+                viewModel.Settings.HotkeyToggleRecord = string.Empty;
+                break;
+            case "Buffer":
+                viewModel.Settings.HotkeyToggleBuffer = string.Empty;
+                break;
+        }
+
+        (Application.Current as App)?.ReRegisterHotkeys();
+        RefreshHotkeyButtons();
     }
 
     private void HotkeyCapture_Click(object sender, RoutedEventArgs e)
@@ -118,11 +147,14 @@ public partial class MainWindow
             parts.Add("Win");
         }
 
-        var isFunctionKey = key is >= Key.F1 and <= Key.F24;
-        if (parts.Count == 0 && !isFunctionKey)
+        // Shift alone is just typing (Shift+Space, Shift+A...): require Ctrl, Alt or Win,
+        // and never let a navigation key become a global shortcut on its own.
+        var hasStrongModifier = (modifiers & (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Windows)) != 0;
+        var isNavigationKey = key is Key.Space or Key.Enter or Key.Tab or Key.Back or Key.Delete;
+        if ((!hasStrongModifier && !(key is >= Key.F1 and <= Key.F24)) || (isNavigationKey && !hasStrongModifier))
         {
             // A bare letter would fire while typing anywhere; ask for a modifier.
-            _capturingHotkeyButton.Content = Loc.T("Settings.PressKeys");
+            _capturingHotkeyButton.Content = Loc.T("Settings.NeedModifier");
             return;
         }
 

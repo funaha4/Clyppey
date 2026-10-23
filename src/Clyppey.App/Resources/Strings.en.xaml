@@ -87,6 +87,9 @@
     <sys:String x:Key="Toast.OutputFallback">The chosen folder is not writable. Clips are saved to {0}</sys:String>
     <sys:String x:Key="Settings.Browse">Browse…</sys:String>
     <sys:String x:Key="Settings.PressKeys">Press keys…</sys:String>
+    <sys:String x:Key="Settings.HotkeyClear">Clear this binding</sys:String>
+    <sys:String x:Key="Settings.HotkeyUnset">Not set</sys:String>
+    <sys:String x:Key="Settings.NeedModifier">Hold a modifier</sys:String>
     <sys:String x:Key="Settings.Hotkeys">Hotkeys</sys:String>
     <sys:String x:Key="Settings.HotkeysHint">Click a button, then press the key combination you want (modifier + key). Esc cancels.</sys:String>
     <sys:String x:Key="Settings.HotkeySave">Save the last seconds</sys:String>

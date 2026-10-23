@@ -237,8 +237,19 @@ public partial class App : Application
         string configured, string[] alternatives, string label, Action action,
         Action<string> apply, List<string> remapped, List<string> failed)
     {
-        var candidates = new List<string> { configured };
-        candidates.AddRange(alternatives.Where(a => !string.Equals(a, configured, StringComparison.OrdinalIgnoreCase)));
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            return; // the user removed this binding on purpose
+        }
+
+        var candidates = new List<string> { configured.Trim() };
+
+        // Only the built-in defaults may fall back to another key. A combination the user picked
+        // must never be silently replaced - if it is taken, say so and leave it as chosen.
+        if (alternatives.Any(a => string.Equals(a, configured.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            candidates.AddRange(alternatives.Where(a => !string.Equals(a, configured.Trim(), StringComparison.OrdinalIgnoreCase)));
+        }
 
         if (_hotkeys!.RegisterAny(candidates, action, out var used, out var errors))
         {

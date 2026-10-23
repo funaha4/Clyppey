@@ -609,18 +609,30 @@
                                             <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
                                         <TextBlock Text="{DynamicResource Settings.HotkeySave}" Style="{StaticResource FieldLabel}" Margin="0,0,0,8" />
-                                        <Button x:Name="HotkeySaveButton" Grid.Column="1" Tag="Save" Click="HotkeyCapture_Click"
-                                                Style="{StaticResource BaseButton}" MinWidth="190" HorizontalAlignment="Left"
-                                                Margin="0,0,0,8" FontWeight="SemiBold" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,8">
+                                            <Button x:Name="HotkeySaveButton" Tag="Save" Click="HotkeyCapture_Click"
+                                                    Style="{StaticResource BaseButton}" MinWidth="190" FontWeight="SemiBold" />
+                                            <Button Tag="Save" Click="ClearHotkey_Click" Margin="6,0,0,0" Content="&#x00D7;" FontSize="16"
+                                                    Style="{StaticResource BaseButton}" Width="38"
+                                                    ToolTip="{DynamicResource Settings.HotkeyClear}" />
+                                        </StackPanel>
                                         <TextBlock Grid.Row="1" Text="{DynamicResource Settings.HotkeyRecord}"
                                                    Style="{StaticResource FieldLabel}" Margin="0,0,0,8" />
-                                        <Button x:Name="HotkeyRecordButton" Grid.Row="1" Grid.Column="1" Tag="Record"
-                                                Click="HotkeyCapture_Click" Style="{StaticResource BaseButton}" MinWidth="190"
-                                                HorizontalAlignment="Left" Margin="0,0,0,8" FontWeight="SemiBold" />
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,8">
+                                            <Button x:Name="HotkeyRecordButton" Tag="Record" Click="HotkeyCapture_Click"
+                                                    Style="{StaticResource BaseButton}" MinWidth="190" FontWeight="SemiBold" />
+                                            <Button Tag="Record" Click="ClearHotkey_Click" Margin="6,0,0,0" Content="&#x00D7;" FontSize="16"
+                                                    Style="{StaticResource BaseButton}" Width="38"
+                                                    ToolTip="{DynamicResource Settings.HotkeyClear}" />
+                                        </StackPanel>
                                         <TextBlock Grid.Row="2" Text="{DynamicResource Settings.HotkeyBuffer}" Style="{StaticResource FieldLabel}" />
-                                        <Button x:Name="HotkeyBufferButton" Grid.Row="2" Grid.Column="1" Tag="Buffer"
-                                                Click="HotkeyCapture_Click" Style="{StaticResource BaseButton}" MinWidth="190"
-                                                HorizontalAlignment="Left" FontWeight="SemiBold" />
+                                        <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                                            <Button x:Name="HotkeyBufferButton" Tag="Buffer" Click="HotkeyCapture_Click"
+                                                    Style="{StaticResource BaseButton}" MinWidth="190" FontWeight="SemiBold" />
+                                            <Button Tag="Buffer" Click="ClearHotkey_Click" Margin="6,0,0,0" Content="&#x00D7;" FontSize="16"
+                                                    Style="{StaticResource BaseButton}" Width="38"
+                                                    ToolTip="{DynamicResource Settings.HotkeyClear}" />
+                                        </StackPanel>
                                     </Grid>
                                 </StackPanel>
                             </Border>

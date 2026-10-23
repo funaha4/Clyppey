@@ -87,6 +87,9 @@
     <sys:String x:Key="Toast.OutputFallback">指定したフォルダに書き込めないため、クリップは {0} に保存します</sys:String>
     <sys:String x:Key="Settings.Browse">参照…</sys:String>
     <sys:String x:Key="Settings.PressKeys">キーを押してください…</sys:String>
+    <sys:String x:Key="Settings.HotkeyClear">この割り当てを解除</sys:String>
+    <sys:String x:Key="Settings.HotkeyUnset">未設定</sys:String>
+    <sys:String x:Key="Settings.NeedModifier">修飾キーを押してください</sys:String>
     <sys:String x:Key="Settings.Hotkeys">ホットキー</sys:String>
     <sys:String x:Key="Settings.HotkeysHint">ボタンを押してから、割り当てたいキーを押してください（修飾キー＋キー）。Esc で取り消し。</sys:String>
     <sys:String x:Key="Settings.HotkeySave">直近を保存</sys:String>
