@@ -105,7 +105,17 @@ public partial class MainWindow
         {
             Interval = TimeSpan.FromSeconds(9)
         };
-        _captureTimeout.Tick += (_, _) => FinishHotkeyCapture(null);
+        _captureTimeout.Tick += (_, _) =>
+        {
+            // If nothing arrived, another app (an overlay, for instance) is probably holding
+            // the combination and the OS never delivered it to us.
+            var stuck = _capturingHotkeyButton;
+            FinishHotkeyCapture(null);
+            if (stuck is not null)
+            {
+                stuck.Content = Loc.T("Settings.KeyNotDetected");
+            }
+        };
         _captureTimeout.Start();
         button.Content = Loc.T("Settings.PressKeys");
         button.Focus();

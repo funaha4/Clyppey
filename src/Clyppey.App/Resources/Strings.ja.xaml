@@ -91,6 +91,7 @@
     <sys:String x:Key="Settings.HotkeyUnset">未設定</sys:String>
     <sys:String x:Key="Settings.NeedModifier">修飾キーを押してください</sys:String>
     <sys:String x:Key="Settings.KeyUnsupported">このキーは登録できません（Fキー・文字・数字をお使いください）</sys:String>
+    <sys:String x:Key="Settings.KeyNotDetected">検出できません（他のアプリが使用中かもしれません）</sys:String>
     <sys:String x:Key="Settings.Hotkeys">ホットキー</sys:String>
     <sys:String x:Key="Settings.HotkeysHint">ボタンを押してから、割り当てたいキーを押してください（修飾キー＋キー）。Esc で取り消し。</sys:String>
     <sys:String x:Key="Settings.HotkeySave">直近を保存</sys:String>
