@@ -85,8 +85,15 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
-                    <Image Source="Assets/clyppey.ico" Width="22" Height="22"
-                           RenderOptions.BitmapScalingMode="HighQuality" />
+                    <Viewbox Width="26" Height="26" VerticalAlignment="Center">
+                                <Grid Width="64" Height="64">
+                                    <Border CornerRadius="16" Background="#12151B" />
+                                    <Ellipse Margin="12" Stroke="#A3E635" StrokeThickness="5"
+                                             StrokeDashArray="7 2.8" StrokeDashOffset="1.4"
+                                             StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    <Path Fill="#F5F8FC" Data="M 27,23 L 41,32 L 27,41 Z" />
+                                </Grid>
+                            </Viewbox>
                     <TextBlock Text="{DynamicResource App.Title}" FontWeight="Bold" FontSize="13.5"
                                Margin="9,0,0,0" VerticalAlignment="Center" />
                     <TextBlock Text="{DynamicResource App.Tagline}" Style="{StaticResource Caption}"
