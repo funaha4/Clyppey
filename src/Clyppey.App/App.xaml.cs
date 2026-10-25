@@ -101,6 +101,7 @@ public partial class App : Application
             }
 
             _ = ViewModel.InitializeAsync();
+        _ = ViewModel.CheckForUpdatesAsync();
             ReRegisterHotkeys();
         SyncAutostart();
             CaptureAndQuit(screenshotPath);
@@ -129,6 +130,7 @@ public partial class App : Application
         ReRegisterHotkeys();
         SyncAutostart();
         _ = ViewModel.InitializeAsync();
+        _ = ViewModel.CheckForUpdatesAsync();
     }
 
     // ---------------------------------------------------------------- window

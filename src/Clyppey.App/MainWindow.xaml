@@ -382,6 +382,31 @@
                         <StackPanel Margin="24,16,24,20">
                             <TextBlock Text="{DynamicResource Settings.Title}" Style="{StaticResource H2}" Margin="0,0,0,14" />
 
+                            <!-- updates -->
+                            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE895;" Style="{StaticResource Ico}" FontSize="14" />
+                                        <TextBlock Text="{DynamicResource Settings.Update}" Style="{StaticResource SectionTitle}" Margin="9,0,0,0" />
+                                        <Border Background="#0C1319" CornerRadius="7" Padding="8,3" Margin="10,0,0,0"
+                                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                                            <TextBlock Text="{Binding AppVersion}" Style="{StaticResource Caption}"
+                                                       Foreground="{StaticResource AccentBrush}" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource Caption}"
+                                               Margin="0,8,0,0" TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                        <Button Content="{DynamicResource Settings.UpdateCheck}" Click="CheckUpdate_Click"
+                                                Style="{StaticResource BaseButton}" IsEnabled="{Binding CanCheckUpdate}" />
+                                        <Button Content="{DynamicResource Settings.UpdateApply}" Click="ApplyUpdate_Click"
+                                                Style="{StaticResource BaseButton}" Margin="8,0,0,0"
+                                                IsEnabled="{Binding CanApplyUpdate}"
+                                                Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVis}}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
                             <!-- which screen gets captured -->
                             <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                                 <StackPanel>

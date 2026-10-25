@@ -173,7 +173,7 @@ public sealed class MainViewModel : ObservableObject
 
     public ObservableCollection<ClipEntry> AllClips { get; }
 
-    public string AppVersion { get; } = "v1.1.0";
+    public string AppVersion => Clyppey.Core.AppInfo.DisplayVersion;
 
     public string AppTitle => Loc.F("App.Title");
 
@@ -402,6 +402,113 @@ public sealed class MainViewModel : ObservableObject
                 _settings.MicrophoneDeviceId = value?.Id;
                 SchedulePipelineChange();
             }
+        }
+    }
+
+    // ---- updates -------------------------------------------------------
+
+    private string _updateStatus = string.Empty;
+    private bool _updateAvailable;
+    private bool _updateBusy;
+    private Clyppey.Core.Update.UpdateInfo? _pendingUpdate;
+
+    public string UpdateStatus => _updateStatus.Length > 0 ? _updateStatus : Loc.T("Settings.UpdateIdle");
+
+    private void SetUpdateStatus(string value)
+    {
+        _updateStatus = value;
+        Raise(nameof(UpdateStatus));
+    }
+
+    public bool UpdateAvailable
+    {
+        get => _updateAvailable;
+        private set
+        {
+            if (Set(ref _updateAvailable, value))
+            {
+                Raise(nameof(CanApplyUpdate));
+            }
+        }
+    }
+
+    public bool CanCheckUpdate => !_updateBusy;
+
+    public bool CanApplyUpdate => _updateAvailable && !_updateBusy;
+
+    public async Task CheckForUpdatesAsync()
+    {
+        if (_updateBusy)
+        {
+            return;
+        }
+
+        _updateBusy = true;
+        Raise(nameof(CanCheckUpdate));
+        Raise(nameof(CanApplyUpdate));
+        SetUpdateStatus(Loc.T("Settings.UpdateChecking"));
+
+        try
+        {
+            _pendingUpdate = await Clyppey.Core.Update.UpdateService
+                .CheckAsync(Clyppey.Core.AppInfo.Version, CancellationToken.None)
+                .ConfigureAwait(true);
+
+            UpdateAvailable = _pendingUpdate is not null;
+            SetUpdateStatus(_pendingUpdate is null
+                ? Loc.F("Settings.UpdateUpToDate", AppVersion)
+                : Loc.F("Settings.UpdateAvailable", "v" + _pendingUpdate.Version,
+                    $"{_pendingUpdate.SizeBytes / 1024.0 / 1024.0:F0} MB"));
+            Log.Info($"更新確認: 現在 {AppVersion} / 最新 v{_pendingUpdate?.Version ?? AppInfo.Version}");
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"更新確認に失敗: {ex.Message}");
+            SetUpdateStatus(Loc.F("Settings.UpdateFailed", ex.Message));
+        }
+        finally
+        {
+            _updateBusy = false;
+            Raise(nameof(CanCheckUpdate));
+            Raise(nameof(CanApplyUpdate));
+        }
+    }
+
+    public async Task ApplyUpdateAsync()
+    {
+        if (_pendingUpdate is null || _updateBusy)
+        {
+            return;
+        }
+
+        _updateBusy = true;
+        Raise(nameof(CanCheckUpdate));
+        Raise(nameof(CanApplyUpdate));
+
+        try
+        {
+            var progress = new Progress<double>(fraction =>
+                SetUpdateStatus(Loc.F("Settings.UpdateDownloading", fraction * 100)));
+
+            var zip = await Clyppey.Core.Update.UpdateService
+                .DownloadAsync(_pendingUpdate, progress, CancellationToken.None)
+                .ConfigureAwait(true);
+
+            SetUpdateStatus(Loc.T("Settings.UpdateInstalling"));
+            var files = Clyppey.Core.Update.UpdateService.Extract(zip);
+            var installDirectory = Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
+            Clyppey.Core.Update.UpdateService.StartSwap(files, installDirectory, Environment.ProcessId);
+
+            await Task.Delay(400).ConfigureAwait(true);
+            Application.Current?.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"アップデートに失敗: {ex.Message}");
+            SetUpdateStatus(Loc.F("Settings.UpdateFailed", ex.Message));
+            _updateBusy = false;
+            Raise(nameof(CanCheckUpdate));
+            Raise(nameof(CanApplyUpdate));
         }
     }
 

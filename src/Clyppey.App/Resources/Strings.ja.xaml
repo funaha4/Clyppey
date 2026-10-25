@@ -92,6 +92,16 @@
     <sys:String x:Key="Settings.NeedModifier">修飾キーを押してください</sys:String>
     <sys:String x:Key="Settings.KeyUnsupported">このキーは登録できません（Fキー・文字・数字をお使いください）</sys:String>
     <sys:String x:Key="Settings.KeyNotDetected">検出できません（他のアプリが使用中かもしれません）</sys:String>
+    <sys:String x:Key="Settings.Update">アップデート</sys:String>
+    <sys:String x:Key="Settings.UpdateCheck">更新を確認</sys:String>
+    <sys:String x:Key="Settings.UpdateApply">アップデート</sys:String>
+    <sys:String x:Key="Settings.UpdateChecking">確認しています…</sys:String>
+    <sys:String x:Key="Settings.UpdateUpToDate">{0} が最新です</sys:String>
+    <sys:String x:Key="Settings.UpdateAvailable">{0} が公開されています（{1}）</sys:String>
+    <sys:String x:Key="Settings.UpdateDownloading">ダウンロード中 {0:F0}%</sys:String>
+    <sys:String x:Key="Settings.UpdateInstalling">インストールしています。アプリは自動で再起動します</sys:String>
+    <sys:String x:Key="Settings.UpdateFailed">更新を確認できませんでした: {0}</sys:String>
+    <sys:String x:Key="Settings.UpdateIdle">未確認（更新を確認してください）</sys:String>
     <sys:String x:Key="Settings.Hotkeys">ホットキー</sys:String>
     <sys:String x:Key="Settings.HotkeysHint">ボタンを押してから、割り当てたいキーを押してください（修飾キー＋キー）。Esc で取り消し。</sys:String>
     <sys:String x:Key="Settings.HotkeySave">直近を保存</sys:String>

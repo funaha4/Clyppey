@@ -92,6 +92,16 @@
     <sys:String x:Key="Settings.NeedModifier">Hold a modifier</sys:String>
     <sys:String x:Key="Settings.KeyUnsupported">That key cannot be registered — use F-keys, letters or numbers</sys:String>
     <sys:String x:Key="Settings.KeyNotDetected">Not detected — another app may be using it</sys:String>
+    <sys:String x:Key="Settings.Update">Updates</sys:String>
+    <sys:String x:Key="Settings.UpdateCheck">Check for updates</sys:String>
+    <sys:String x:Key="Settings.UpdateApply">Update now</sys:String>
+    <sys:String x:Key="Settings.UpdateChecking">Checking…</sys:String>
+    <sys:String x:Key="Settings.UpdateUpToDate">{0} is up to date</sys:String>
+    <sys:String x:Key="Settings.UpdateAvailable">{0} is available ({1})</sys:String>
+    <sys:String x:Key="Settings.UpdateDownloading">Downloading {0:F0}%</sys:String>
+    <sys:String x:Key="Settings.UpdateInstalling">Installing — the app will restart</sys:String>
+    <sys:String x:Key="Settings.UpdateFailed">Could not check for updates: {0}</sys:String>
+    <sys:String x:Key="Settings.UpdateIdle">Not checked yet</sys:String>
     <sys:String x:Key="Settings.Hotkeys">Hotkeys</sys:String>
     <sys:String x:Key="Settings.HotkeysHint">Click a button, then press the key combination you want (modifier + key). Esc cancels.</sys:String>
     <sys:String x:Key="Settings.HotkeySave">Save the last seconds</sys:String>
