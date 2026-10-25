@@ -30,7 +30,7 @@
     <sys:String x:Key="Hero.Memory">About {0} MB of RAM</sys:String>
     <sys:String x:Key="Hero.Warming">Starting…</sys:String>
 
-    <sys:String x:Key="Action.Save">Save now</sys:String>
+    <sys:String x:Key="Action.Save">Save replay</sys:String>
     <sys:String x:Key="Action.RecordStart">Start recording</sys:String>
     <sys:String x:Key="Action.RecordStop">Stop recording</sys:String>
     <sys:String x:Key="Action.BufferStart">Start buffering</sys:String>

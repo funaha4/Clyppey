@@ -85,7 +85,8 @@ public partial class App : Application
             _window.Show();
             if (tabIndex >= 0)
             {
-                _window.Nav.SelectedIndex = tabIndex;
+                // apply after the window restores its own last tab, otherwise that wins
+            _window.Dispatcher.BeginInvoke(new Action(() => _window.Nav.SelectedIndex = tabIndex), System.Windows.Threading.DispatcherPriority.Background);
             }
 
             // dev only: exercise the live language switch exactly like the header pills do

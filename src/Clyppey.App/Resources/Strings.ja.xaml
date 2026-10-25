@@ -30,7 +30,7 @@
     <sys:String x:Key="Hero.Memory">メモリを約 {0} MB 使います</sys:String>
     <sys:String x:Key="Hero.Warming">起動中…</sys:String>
 
-    <sys:String x:Key="Action.Save">今すぐ保存</sys:String>
+    <sys:String x:Key="Action.Save">直前を保存</sys:String>
     <sys:String x:Key="Action.RecordStart">録画を開始</sys:String>
     <sys:String x:Key="Action.RecordStop">録画を停止</sys:String>
     <sys:String x:Key="Action.BufferStart">バッファを開始</sys:String>
