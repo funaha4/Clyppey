@@ -102,6 +102,7 @@ public partial class App : Application
 
             _ = ViewModel.InitializeAsync();
             ReRegisterHotkeys();
+        SyncAutostart();
             CaptureAndQuit(screenshotPath);
             return;
         }
@@ -126,6 +127,7 @@ public partial class App : Application
 
         SetupTray();
         ReRegisterHotkeys();
+        SyncAutostart();
         _ = ViewModel.InitializeAsync();
     }
 
@@ -178,6 +180,34 @@ public partial class App : Application
         catch (Exception ex)
         {
             Log.Debug($"ホットキーを一時解除できません: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Keeps the Run entry in step with the setting. The executable moves when the app is
+    /// reinstalled and the key can be cleaned by other tools, so it is rewritten on every start.
+    /// </summary>
+    private void SyncAutostart()
+    {
+        try
+        {
+            if (ViewModel?.Settings is not { } settings)
+            {
+                return;
+            }
+
+            if (settings.StartWithWindows)
+            {
+                Platform.Autostart.SetEnabled(true);
+            }
+            else if (Platform.Autostart.IsEnabled())
+            {
+                Platform.Autostart.SetEnabled(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"自動起動の同期に失敗: {ex.Message}");
         }
     }
 

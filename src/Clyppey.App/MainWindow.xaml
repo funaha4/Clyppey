@@ -654,7 +654,7 @@
                                     <CheckBox Content="{DynamicResource Settings.AutoBuffer}" Margin="0,12,0,0"
                                               IsChecked="{Binding Settings.AutoStartBuffering, Mode=TwoWay}" />
                                     <CheckBox Content="{DynamicResource Settings.AutoStartWindows}" Margin="0,10,0,0"
-                                              IsChecked="{Binding Settings.StartWithWindows, Mode=TwoWay}" />
+                                              IsChecked="{Binding StartWithWindows, Mode=TwoWay}" />
                                     <CheckBox Content="{DynamicResource Settings.StartMinimized}" Margin="0,10,0,0"
                                               IsChecked="{Binding Settings.StartMinimized, Mode=TwoWay}" />
                                     <CheckBox Content="{DynamicResource Settings.OpenOnSave}" Margin="0,10,0,0"

@@ -405,6 +405,27 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>Registers (or removes) the per-user Run entry for this executable.</summary>
+    public bool StartWithWindows
+    {
+        get => _settings.StartWithWindows;
+        set
+        {
+            if (_settings.StartWithWindows == value)
+            {
+                return;
+            }
+
+            _settings.StartWithWindows = value;
+            if (!Platform.Autostart.SetEnabled(value))
+            {
+                Log.Warn("自動起動を設定できませんでした");
+            }
+
+            Raise();
+        }
+    }
+
     /// <summary>Disk-backed replay buffer: RAM stops growing with the buffer length.</summary>
     public bool BufferOnDisk
     {
