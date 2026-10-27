@@ -641,6 +641,40 @@ public sealed class ReplayEngine : IDisposable
     private void OnFragmentEvicted(VideoFragment fragment) => _store?.Delete(fragment.FilePath);
 
     /// <summary>
+    /// Rebuilds the capture after the desktop duplication was lost (display change, lock screen,
+    /// exclusive fullscreen, driver reset). Retries with growing delays before giving up.
+    /// </summary>
+    private async Task RestartCaptureAsync(int exitCode)
+    {
+        for (var attempt = 1; attempt <= 8; attempt++)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(500 * attempt)).ConfigureAwait(false);
+
+            if (State is not (EngineState.Buffering or EngineState.Recording))
+            {
+                return; // the user stopped it meanwhile
+            }
+
+            try
+            {
+                Log.Info($"キャプチャを再接続します (試行 {attempt})");
+                await StopAsync().ConfigureAwait(false);
+                await StartBufferingAsync().ConfigureAwait(false);
+                Log.Info("キャプチャを再接続しました");
+                return;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"再接続に失敗しました (試行 {attempt}): {ex.Message}");
+            }
+        }
+
+        Log.Error($"キャプチャを再接続できませんでした (最後の終了コード {exitCode})");
+        SetState(EngineState.Error);
+        Failed?.Invoke("キャプチャを再接続できませんでした。バッファを停止してから再度開始してください。");
+    }
+
+    /// <summary>
     /// The disk buffer is capped at buffer-length x bitrate, but that is still gigabytes. Say so
     /// instead of filling the drive quietly.
     /// </summary>
