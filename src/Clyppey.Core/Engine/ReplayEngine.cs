@@ -88,6 +88,7 @@ public sealed class ReplayEngine : IDisposable
 
     private CaptureSession? _session;
     private DiskFragmentStore? _store;
+    private int _restartAttempts;
     private PerfSampler? _perf;
     private CaptureSink? _sink;
     private CancellationTokenSource? _watchCts;
@@ -605,6 +606,7 @@ public sealed class ReplayEngine : IDisposable
     private void OnFragmentReady(FragmentChunk chunk)
     {
         var fps = Math.Max(1, _settings.EffectiveFps);
+        _restartAttempts = 0;
         var storedPath = _store?.Write(chunk.Data);
         var fragment = new VideoFragment
         {
@@ -657,6 +659,15 @@ public sealed class ReplayEngine : IDisposable
     /// </summary>
     private async Task RestartCaptureAsync(int exitCode)
     {
+        _restartAttempts++;
+        if (_restartAttempts > 8)
+        {
+            Log.Error($"再接続を {_restartAttempts} 回試みましたが復帰しません (最後の終了コード {exitCode})");
+            SetState(EngineState.Error);
+            Failed?.Invoke("キャプチャを再接続できませんでした。バッファを停止してから再度開始してください。");
+            return;
+        }
+
         for (var attempt = 1; attempt <= 8; attempt++)
         {
             await Task.Delay(TimeSpan.FromMilliseconds(500 * attempt)).ConfigureAwait(false);
