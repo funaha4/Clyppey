@@ -88,6 +88,7 @@ public sealed class ReplayEngine : IDisposable
 
     private CaptureSession? _session;
     private DiskFragmentStore? _store;
+    private int _restartAttempts;
 
     private PerfSampler? _perf;
     private CaptureSink? _sink;
@@ -607,6 +608,7 @@ public sealed class ReplayEngine : IDisposable
     {
         var fps = Math.Max(1, _settings.EffectiveFps);
 
+        _restartAttempts = 0;
         var storedPath = _store?.Write(chunk.Data);
         var fragment = new VideoFragment
         {
@@ -659,6 +661,15 @@ public sealed class ReplayEngine : IDisposable
     /// </summary>
     private async Task RestartCaptureAsync(int exitCode)
     {
+        _restartAttempts++;
+
+        // While the desktop cannot be duplicated (locked screen, exclusive game) back off instead
+        // of respawning ffmpeg every second.
+        if (_restartAttempts > 8)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        }
+
         for (var attempt = 1; ; attempt++)
         {
             // exclusive fullscreen cannot be captured at all; wait it out instead of giving up.
