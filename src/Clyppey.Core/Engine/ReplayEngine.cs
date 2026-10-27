@@ -89,6 +89,9 @@ public sealed class ReplayEngine : IDisposable
     private CaptureSession? _session;
     private DiskFragmentStore? _store;
     private int _restartAttempts;
+    private double _epochOffset;
+    private double _lastFragmentArrival;
+    private bool _preserveBuffer;
 
     private PerfSampler? _perf;
     private CaptureSink? _sink;
@@ -464,7 +467,10 @@ public sealed class ReplayEngine : IDisposable
         _demuxer.Reset();
         lock (_gate)
         {
-            _ring.Clear();
+            if (!_preserveBuffer)
+            {
+                _ring.Clear();
+            }
             _ring.MaxSeconds = _settings.EffectiveBufferSeconds;
             _ring.MaxBytes = Math.Max(64, _settings.MaxBufferMegabytes) * 1024L * 1024L;
         }
@@ -473,7 +479,7 @@ public sealed class ReplayEngine : IDisposable
         _firstFragmentDuration = 0;
         _captureStartWall = Clock.Now;
 
-        if (_settings.BufferOnDisk)
+        if (_settings.BufferOnDisk && !_preserveBuffer)
         {
             DiskFragmentStore.RemoveStale();
             WarnIfDiskIsTight();
@@ -489,12 +495,18 @@ public sealed class ReplayEngine : IDisposable
 
         if (_settings.CaptureAudio)
         {
+            if (!_desktopAudio.IsRunning)
+            {
             _desktopAudio.Start(_settings.AudioDeviceId, _settings.EffectiveBufferSeconds);
+            }
         }
 
         if (_settings.CaptureMicrophone)
         {
+            if (!_microphone.IsRunning)
+            {
             _microphone.Start(_settings.MicrophoneDeviceId, _settings.EffectiveBufferSeconds);
+            }
         }
 
         _perf = new PerfSampler(_session.ProcessId);
@@ -521,10 +533,13 @@ public sealed class ReplayEngine : IDisposable
 
         _sink = null;
 
-        _ring.Evicted -= OnFragmentEvicted;
-        _ring.Clear();
-        _store?.Dispose();
-        _store = null;
+        if (!_preserveBuffer)
+        {
+            _ring.Evicted -= OnFragmentEvicted;
+            _ring.Clear();
+            _store?.Dispose();
+            _store = null;
+        }
 
         try
         {
@@ -609,13 +624,14 @@ public sealed class ReplayEngine : IDisposable
         var fps = Math.Max(1, _settings.EffectiveFps);
 
         _restartAttempts = 0;
+        _lastFragmentArrival = chunk.ArrivalSeconds;
         var storedPath = _store?.Write(chunk.Data);
         var fragment = new VideoFragment
         {
             Data = storedPath is null ? chunk.Data : Array.Empty<byte>(),
             FilePath = storedPath,
             SizeBytes = chunk.Data.Length,
-            Start = chunk.StartSeconds,
+            Start = _epochOffset + chunk.StartSeconds,
             Duration = chunk.SampleCount > 0 ? chunk.SampleCount / (double)fps : 1.0 / fps,
             SampleCount = chunk.SampleCount,
             ArrivalSeconds = chunk.ArrivalSeconds
@@ -694,8 +710,24 @@ public sealed class ReplayEngine : IDisposable
                 {
                     Log.Info($"キャプチャを再接続します (試行 {attempt})");
                 }
-                await StopAsync().ConfigureAwait(false);
-                await StartBufferingAsync().ConfigureAwait(false);
+                    double lastEnd;
+                    lock (_gate)
+                    {
+                        lastEnd = _ring.EndSeconds;
+                    }
+
+                    // keep what was already recorded and continue after the gap
+                    _epochOffset = lastEnd + Math.Max(0.2, Clock.Now - _lastFragmentArrival);
+                    _preserveBuffer = true;
+                    try
+                    {
+                        await StopAsync().ConfigureAwait(false);
+                        await StartBufferingAsync().ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        _preserveBuffer = false;
+                    }
                 Log.Info("キャプチャを再接続しました");
                 return;
             }
