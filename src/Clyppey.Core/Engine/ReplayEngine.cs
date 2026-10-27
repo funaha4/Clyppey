@@ -577,8 +577,7 @@ public sealed class ReplayEngine : IDisposable
                     if (State is EngineState.Buffering or EngineState.Recording)
                     {
                         Log.Error($"キャプチャプロセスが予期せず終了しました (exit={session.ExitCode})");
-                        SetState(EngineState.Error);
-                        Failed?.Invoke($"エンコーダが停止しました (exit code {session.ExitCode})。診断タブのログを確認してください。");
+                        _ = RestartCaptureAsync(session.ExitCode ?? 0);
                     }
 
                     return;
