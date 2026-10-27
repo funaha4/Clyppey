@@ -3,7 +3,7 @@ namespace Clyppey.Core;
 /// <summary>Identity of the running build, shared by the UI and the updater.</summary>
 public static class AppInfo
 {
-    public const string Version = "1.3.0";
+    public const string Version = "1.3.1";
 
     public const string DisplayVersion = "v" + Version;
 
