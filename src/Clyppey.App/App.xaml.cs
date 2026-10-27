@@ -103,6 +103,7 @@ public partial class App : Application
 
             _ = ViewModel.InitializeAsync();
         _ = ViewModel.CheckForUpdatesAsync();
+        HookDisplayEvents();
             ReRegisterHotkeys();
         SyncAutostart();
             CaptureAndQuit(screenshotPath);
@@ -132,6 +133,7 @@ public partial class App : Application
         SyncAutostart();
         _ = ViewModel.InitializeAsync();
         _ = ViewModel.CheckForUpdatesAsync();
+        HookDisplayEvents();
     }
 
     // ---------------------------------------------------------------- window
@@ -190,6 +192,37 @@ public partial class App : Application
     /// Keeps the Run entry in step with the setting. The executable moves when the app is
     /// reinstalled and the key can be cleaned by other tools, so it is rewritten on every start.
     /// </summary>
+    /// <summary>
+    /// The duplication is invalidated by a display mode change, a lock/unlock, or a resume.
+    /// Restart the capture on those events instead of waiting for it to fail mid-frame.
+    /// </summary>
+    private void HookDisplayEvents()
+    {
+        try
+        {
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += (_, _) => ViewModel?.RequestCaptureReconnect();
+            Microsoft.Win32.SystemEvents.PowerModeChanged += (_, e) =>
+            {
+                if (e.Mode == Microsoft.Win32.PowerModes.Resume)
+                {
+                    ViewModel?.RequestCaptureReconnect();
+                }
+            };
+            Microsoft.Win32.SystemEvents.SessionSwitch += (_, e) =>
+            {
+                if (e.Reason == Microsoft.Win32.SessionSwitchReason.SessionUnlock)
+                {
+                    ViewModel?.RequestCaptureReconnect();
+                }
+            };
+            Log.Info("画面構成・電源・セッションの変更を監視します");
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"表示イベントを購読できません: {ex.Message}");
+        }
+    }
+
     private void SyncAutostart()
     {
         try

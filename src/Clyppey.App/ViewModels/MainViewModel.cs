@@ -512,6 +512,9 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    /// <summary>Forwarded when a display/session change invalidates the duplication.</summary>
+    public void RequestCaptureReconnect() => _engine?.RequestReconnect();
+
     /// <summary>Registers (or removes) the per-user Run entry for this executable.</summary>
     public bool StartWithWindows
     {

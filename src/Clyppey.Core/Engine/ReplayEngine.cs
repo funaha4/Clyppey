@@ -640,6 +640,18 @@ public sealed class ReplayEngine : IDisposable
     private void OnFragmentEvicted(VideoFragment fragment) => _store?.Delete(fragment.FilePath);
 
     /// <summary>
+    /// Rebuilds the capture before the duplication dies (display mode change, unlock, resume).
+    /// Waiting for the failure costs a dropped pipeline; doing it up front keeps the gap short.
+    /// </summary>
+    public void RequestReconnect()
+    {
+        if (State is EngineState.Buffering or EngineState.Recording)
+        {
+            _ = RestartCaptureAsync(0);
+        }
+    }
+
+    /// <summary>
     /// Rebuilds the capture after the desktop duplication was lost (display change, lock screen,
     /// exclusive fullscreen, driver reset). Retries with growing delays before giving up.
     /// </summary>
