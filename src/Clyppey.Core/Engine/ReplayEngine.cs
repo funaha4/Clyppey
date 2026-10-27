@@ -88,7 +88,7 @@ public sealed class ReplayEngine : IDisposable
 
     private CaptureSession? _session;
     private DiskFragmentStore? _store;
-    private int _restartAttempts;
+
     private PerfSampler? _perf;
     private CaptureSink? _sink;
     private CancellationTokenSource? _watchCts;
@@ -606,7 +606,7 @@ public sealed class ReplayEngine : IDisposable
     private void OnFragmentReady(FragmentChunk chunk)
     {
         var fps = Math.Max(1, _settings.EffectiveFps);
-        _restartAttempts = 0;
+
         var storedPath = _store?.Write(chunk.Data);
         var fragment = new VideoFragment
         {
@@ -659,18 +659,18 @@ public sealed class ReplayEngine : IDisposable
     /// </summary>
     private async Task RestartCaptureAsync(int exitCode)
     {
-        _restartAttempts++;
-        if (_restartAttempts > 8)
+        for (var attempt = 1; ; attempt++)
         {
-            Log.Error($"再接続を {_restartAttempts} 回試みましたが復帰しません (最後の終了コード {exitCode})");
-            SetState(EngineState.Error);
-            Failed?.Invoke("キャプチャを再接続できませんでした。バッファを停止してから再度開始してください。");
-            return;
-        }
+            // exclusive fullscreen cannot be captured at all; wait it out instead of giving up.
+            var delay = attempt <= 8
+                ? TimeSpan.FromMilliseconds(400 * attempt)
+                : TimeSpan.FromSeconds(5);
+            if (attempt == 9)
+            {
+                Failed?.Invoke("画面が他のアプリに占有されています。復帰を待っています…");
+            }
 
-        for (var attempt = 1; attempt <= 8; attempt++)
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(500 * attempt)).ConfigureAwait(false);
+            await Task.Delay(delay).ConfigureAwait(false);
 
             if (State is not (EngineState.Buffering or EngineState.Recording))
             {
@@ -679,7 +679,10 @@ public sealed class ReplayEngine : IDisposable
 
             try
             {
-                Log.Info($"キャプチャを再接続します (試行 {attempt})");
+                if (attempt <= 8)
+                {
+                    Log.Info($"キャプチャを再接続します (試行 {attempt})");
+                }
                 await StopAsync().ConfigureAwait(false);
                 await StartBufferingAsync().ConfigureAwait(false);
                 Log.Info("キャプチャを再接続しました");
@@ -687,13 +690,13 @@ public sealed class ReplayEngine : IDisposable
             }
             catch (Exception ex)
             {
-                Log.Warn($"再接続に失敗しました (試行 {attempt}): {ex.Message}");
+                if (attempt <= 8)
+                {
+                    Log.Warn($"再接続に失敗しました (試行 {attempt}): {ex.Message}");
+                }
             }
         }
 
-        Log.Error($"キャプチャを再接続できませんでした (最後の終了コード {exitCode})");
-        SetState(EngineState.Error);
-        Failed?.Invoke("キャプチャを再接続できませんでした。バッファを停止してから再度開始してください。");
     }
 
     /// <summary>
