@@ -169,7 +169,7 @@ internal static class Program
         var context = new TrimContext(
             Path.GetFullPath(source),
             Path.GetFullPath(output),
-            Path.Combine(AppPaths.TempDir, "cut_" + Guid.NewGuid().ToString("N")[..8]),
+            TrimJob.CreateTempDirectory(Path.GetFullPath(output), AppPaths.TempDir),
             keepRanges,
             keyframes,
             mode,

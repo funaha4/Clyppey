@@ -27,6 +27,41 @@ public sealed record TrimOutcome(
 /// </summary>
 public static class TrimJob
 {
+    /// <summary>Name of the work folder that is created next to the output file.</summary>
+    public const string TempFolderName = ".clyppey-edit";
+
+    /// <summary>
+    /// Work folder for the intermediate segments.
+    ///
+    /// It lives next to the output rather than on the system drive: a 350 MB clip should not
+    /// fill C: when the user records to D:, and keeping both sides of the copy on one volume
+    /// avoids a cross-volume transfer for every segment.
+    /// </summary>
+    public static string CreateTempDirectory(string outputPath, string fallbackRoot)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+            if (!string.IsNullOrEmpty(directory))
+            {
+                var root = Path.Combine(directory, TempFolderName);
+                Directory.CreateDirectory(root);
+
+                var work = Path.Combine(root, Guid.NewGuid().ToString("N")[..8]);
+                Directory.CreateDirectory(work);
+                return work;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug($"出力先に作業フォルダを作れません: {ex.Message}");
+        }
+
+        var fallback = Path.Combine(fallbackRoot, "cut_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(fallback);
+        return fallback;
+    }
+
     public static async Task<TrimOutcome> RunAsync(
         string ffmpegPath,
         TrimContext context,
@@ -236,9 +271,19 @@ public static class TrimJob
     {
         try
         {
-            if (Directory.Exists(path))
+            if (!Directory.Exists(path))
             {
-                Directory.Delete(path, recursive: true);
+                return;
+            }
+
+            Directory.Delete(path, recursive: true);
+
+            // Drop the shared ".clyppey-edit" parent too, but only once it is empty.
+            var parent = Path.GetDirectoryName(path);
+            if (parent is not null &&
+                string.Equals(Path.GetFileName(parent), TempFolderName, StringComparison.OrdinalIgnoreCase))
+            {
+                Directory.Delete(parent);
             }
         }
         catch (Exception ex)

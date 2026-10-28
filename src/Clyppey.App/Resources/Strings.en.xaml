@@ -177,6 +177,7 @@
     <sys:String x:Key="Trim.Done">Saved — {0} s / {1} MB</sys:String>
     <sys:String x:Key="Trim.DoneWarn">Saved with a warning: {0}</sys:String>
     <sys:String x:Key="Trim.Failed">Failed: {0}</sys:String>
+    <sys:String x:Key="Trim.ConfirmDiscard">Discard the edits and close? Ranges that were not saved will be lost.</sys:String>
     <sys:String x:Key="Trim.Empty">Nothing left to keep. Mark the ranges to remove first.</sys:String>
     <sys:String x:Key="Trim.SelectHint">Drag on the timeline to select a range. Drag an edge, or nudge it with ←/→.</sys:String>
     <sys:String x:Key="Trim.SelectionValue">Selection {0} – {1} ({2} s)</sys:String>

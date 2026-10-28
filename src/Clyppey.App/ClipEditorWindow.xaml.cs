@@ -72,6 +72,7 @@ public partial class ClipEditorWindow : Window
     private bool _busy;
     private bool _mediaReady;
     private bool _previewWarned;
+    private bool _confirmedClose;
     private DateTime _openedAtUtc = DateTime.UtcNow;
 
     public ClipEditorWindow(
@@ -114,6 +115,12 @@ public partial class ClipEditorWindow : Window
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         _timer.Tick += (_, _) => OnTick();
         _timer.Start();
+
+        // The layout is fixed, so shrink it to the work area instead of opening a window whose
+        // export button sits off-screen on a 1366x768 laptop.
+        var workArea = SystemParameters.WorkArea;
+        Width = Math.Clamp(workArea.Width - 60, 900, 1180);
+        Height = Math.Clamp(workArea.Height - 60, 620, 820);
 
         Loaded += OnLoaded;
         Closed += (_, _) =>
@@ -1192,7 +1199,9 @@ public partial class ClipEditorWindow : Window
 
         var kept = _cuts.KeptSeconds(_media.Duration);
         KeptText.Text = Loc.F("Trim.KeptValue", kept.ToString("0.0"), _media.Duration.ToString("0.0"));
-        ExportButton.IsEnabled = !_busy && kept > 0.5;
+
+        // Saving with nothing marked would only copy the whole clip again.
+        ExportButton.IsEnabled = !_busy && kept > 0.5 && _cuts.Count > 0;
     }
 
     // ---------------------------------------------------------------- selection
@@ -1325,16 +1334,15 @@ public partial class ClipEditorWindow : Window
         }
 
         var directory = Path.GetDirectoryName(Path.GetFullPath(_clip.Path)) ?? ".";
-        var output = Path.Combine(directory, name);
-        if (string.Equals(output, _clip.Path, StringComparison.OrdinalIgnoreCase))
-        {
-            output = Path.Combine(directory, Path.GetFileNameWithoutExtension(name) + "_1.mp4");
-        }
+
+        // Never overwrite: a second save of the same clip gets "_1", "_2", ...
+        var output = MakeUniquePath(Path.Combine(directory, name));
+        FileNameBox.Text = Path.GetFileName(output);
 
         var context = new TrimContext(
             _clip.Path,
             output,
-            Path.Combine(AppPaths.TempDir, "cut_" + Guid.NewGuid().ToString("N")[..8]),
+            TrimJob.CreateTempDirectory(output, AppPaths.TempDir),
             keeps,
             _keyframes,
             ModeBox.SelectedIndex == 1 ? CutMode.Fast : CutMode.Exact,
@@ -1386,7 +1394,7 @@ public partial class ClipEditorWindow : Window
 
         if (_media is not null)
         {
-            ExportButton.IsEnabled = !busy && _cuts.KeptSeconds(_media.Duration) > 0.5;
+            ExportButton.IsEnabled = !busy && _cuts.KeptSeconds(_media.Duration) > 0.5 && _cuts.Count > 0;
         }
         else
         {
@@ -1402,6 +1410,31 @@ public partial class ClipEditorWindow : Window
         {
             DragMove();
         }
+    }
+
+    /// <summary>Escape and the close button must not throw away a cut list without asking.</summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_confirmedClose && !_busy && _cuts.Count > 0)
+        {
+            var answer = MessageBox.Show(
+                this,
+                Loc.T("Trim.ConfirmDiscard"),
+                Loc.T("Trim.Title"),
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question,
+                MessageBoxResult.No);
+
+            if (answer != MessageBoxResult.Yes)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            _confirmedClose = true;
+        }
+
+        base.OnClosing(e);
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
@@ -1474,6 +1507,30 @@ public partial class ClipEditorWindow : Window
         Log.Warn($"プレビューできません: {e.ErrorException?.Message}");
         BusyText.Text = Loc.F("Trim.NoPreview", e.ErrorException?.Message ?? "?");
         BusyText.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Returns <paramref name="path"/>, or the first free "name_N.ext" next to it.</summary>
+    private static string MakeUniquePath(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return path;
+        }
+
+        var directory = Path.GetDirectoryName(path) ?? ".";
+        var name = Path.GetFileNameWithoutExtension(path);
+        var extension = Path.GetExtension(path);
+
+        for (var index = 1; index < 1000; index++)
+        {
+            var candidate = Path.Combine(directory, $"{name}_{index}{extension}");
+            if (!File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return Path.Combine(directory, $"{name}_{Guid.NewGuid():N}{extension}");
     }
 
     private static string MMss(double seconds)

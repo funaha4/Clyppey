@@ -177,6 +177,7 @@
     <sys:String x:Key="Trim.Done">保存しました — {0} 秒 / {1} MB</sys:String>
     <sys:String x:Key="Trim.DoneWarn">保存しましたが注意があります: {0}</sys:String>
     <sys:String x:Key="Trim.Failed">失敗: {0}</sys:String>
+    <sys:String x:Key="Trim.ConfirmDiscard">編集内容を破棄して閉じますか？（保存していない削除区間は失われます）</sys:String>
     <sys:String x:Key="Trim.Empty">残す区間がありません。先に削除する区間を決めてください。</sys:String>
     <sys:String x:Key="Trim.SelectHint">タイムラインをドラッグで範囲選択。端をドラッグ、または ←/→ で調整できます。</sys:String>
     <sys:String x:Key="Trim.SelectionValue">選択 {0} – {1}（{2} 秒）</sys:String>
