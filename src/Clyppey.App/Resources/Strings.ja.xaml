@@ -153,10 +153,10 @@
     <sys:String x:Key="Common.SecondsShort">{0} 秒</sys:String>
 
     <!-- ==================== clip editor (trim) ==================== -->
-    <sys:String x:Key="Clips.Trim">詰める</sys:String>
-    <sys:String x:Key="Clips.ModeTrim">切り取り</sys:String>
+    <sys:String x:Key="Clips.Trim">編集</sys:String>
+    <sys:String x:Key="Clips.ModeTrim">編集</sys:String>
 
-    <sys:String x:Key="Trim.Title">クリップを詰める</sys:String>
+    <sys:String x:Key="Trim.Title">クリップを編集</sys:String>
     <sys:String x:Key="Trim.Close">閉じる</sys:String>
     <sys:String x:Key="Trim.Loading">読み込み中…</sys:String>
     <sys:String x:Key="Trim.NoPreview">この形式はプレビューできませんが、切り取りは行えます: {0}</sys:String>
@@ -175,7 +175,7 @@
     <sys:String x:Key="Trim.CutAdded">{0} 秒を削除しました（{1} 区間）</sys:String>
     <sys:String x:Key="Trim.ModeExact">ぴったり（境界のみ再エンコード）</sys:String>
     <sys:String x:Key="Trim.ModeFast">最速（無劣化・1 秒単位）</sys:String>
-    <sys:String x:Key="Trim.Export">切り取って保存</sys:String>
+    <sys:String x:Key="Trim.Export">編集して保存</sys:String>
     <sys:String x:Key="Trim.Exporting">書き出し中…</sys:String>
     <sys:String x:Key="Trim.Done">保存しました — {0} 秒 / {1} MB</sys:String>
     <sys:String x:Key="Trim.DoneWarn">保存しましたが注意があります: {0}</sys:String>
@@ -188,5 +188,7 @@
     <sys:String x:Key="Trim.Invert">反転</sys:String>
     <sys:String x:Key="Trim.KeptOnly">{0} 秒だけ残します（外側を削除）</sys:String>
     <sys:String x:Key="Trim.PinnedTime">固定 {0} / {1}</sys:String>
+    <sys:String x:Key="Trim.PlayFromStart">最初から再生</sys:String>
+    <sys:String x:Key="Trim.EdgeHint">選択の端をドラッグ、または ←/→（Shift で 10 フレーム）で調整できます</sys:String>
 
 </ResourceDictionary>

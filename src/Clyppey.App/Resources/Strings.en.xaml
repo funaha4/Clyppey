@@ -153,10 +153,10 @@
     <sys:String x:Key="Common.SecondsShort">{0} s</sys:String>
 
     <!-- ==================== clip editor (trim) ==================== -->
-    <sys:String x:Key="Clips.Trim">Trim</sys:String>
-    <sys:String x:Key="Clips.ModeTrim">Trimmed</sys:String>
+    <sys:String x:Key="Clips.Trim">Edit</sys:String>
+    <sys:String x:Key="Clips.ModeTrim">Edited</sys:String>
 
-    <sys:String x:Key="Trim.Title">Trim clip</sys:String>
+    <sys:String x:Key="Trim.Title">Edit clip</sys:String>
     <sys:String x:Key="Trim.Close">Close</sys:String>
     <sys:String x:Key="Trim.Loading">Loading…</sys:String>
     <sys:String x:Key="Trim.NoPreview">This format cannot be previewed, but it can still be cut: {0}</sys:String>
@@ -175,7 +175,7 @@
     <sys:String x:Key="Trim.CutAdded">Removed {0} s ({1} ranges)</sys:String>
     <sys:String x:Key="Trim.ModeExact">Exact (re-encode at cuts only)</sys:String>
     <sys:String x:Key="Trim.ModeFast">Fastest (no re-encode, 1 s steps)</sys:String>
-    <sys:String x:Key="Trim.Export">Cut and save</sys:String>
+    <sys:String x:Key="Trim.Export">Save edits</sys:String>
     <sys:String x:Key="Trim.Exporting">Writing…</sys:String>
     <sys:String x:Key="Trim.Done">Saved — {0} s / {1} MB</sys:String>
     <sys:String x:Key="Trim.DoneWarn">Saved with a warning: {0}</sys:String>
@@ -188,5 +188,7 @@
     <sys:String x:Key="Trim.Invert">Invert</sys:String>
     <sys:String x:Key="Trim.KeptOnly">Keeping only {0} s (the rest is removed)</sys:String>
     <sys:String x:Key="Trim.PinnedTime">Pinned {0} / {1}</sys:String>
+    <sys:String x:Key="Trim.PlayFromStart">Play from the start</sys:String>
+    <sys:String x:Key="Trim.EdgeHint">Drag an edge, or nudge it with ←/→ (Shift = 10 frames)</sys:String>
 
 </ResourceDictionary>

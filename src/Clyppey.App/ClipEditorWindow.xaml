@@ -66,6 +66,7 @@
                     <Image x:Name="FilmstripImage" Stretch="Fill" Opacity="0.42" Margin="1" />
                     <Canvas x:Name="TimelineCanvas" Background="Transparent" ClipToBounds="True"
                             Cursor="Hand" SizeChanged="TimelineCanvas_SizeChanged"
+                            ToolTip="{DynamicResource Trim.EdgeHint}"
                             MouseLeftButtonDown="Timeline_MouseLeftButtonDown"
                             MouseRightButtonDown="Timeline_MouseRightButtonDown"
                             MouseMove="Timeline_MouseMove"
@@ -84,8 +85,12 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="RestartButton" Style="{StaticResource GhostButton}" Height="38" Padding="10,0"
+                            Click="Restart_Click" ToolTip="{DynamicResource Trim.PlayFromStart}">
+                        <TextBlock Text="&#xE100;" FontFamily="Segoe MDL2 Assets" FontSize="12" />
+                    </Button>
                     <Button x:Name="PlayButton" Style="{StaticResource BaseButton}" Width="48" Padding="0"
-                            Height="38" Click="Play_Click" ToolTip="{DynamicResource Trim.PlayHint}">
+                            Height="38" Margin="6,0,0,0" Click="Play_Click" ToolTip="{DynamicResource Trim.PlayHint}">
                         <TextBlock x:Name="PlayGlyph" Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="13" />
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Height="38" Padding="12,0" Margin="6,0,0,0"

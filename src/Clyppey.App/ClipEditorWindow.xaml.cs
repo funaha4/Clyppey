@@ -40,16 +40,27 @@ public partial class ClipEditorWindow : Window
     private Border? _focusFill;
     private Border? _focusLeft;
     private Border? _focusRight;
+    private Border? _handleLeft;
+    private Border? _handleRight;
     private TimeRange? _selection;
     private double? _markStart;
     private bool _dragging;
+    private bool _edgeDrag;
+    private bool _edgeIsStart;
+    private bool _activeEdgeIsStart;
+    private bool _edgeArmed;
+    private double _edgeFixed;
     private double _dragAnchor;
+    private TimeRange? _selectionBeforeDrag;
     private bool _pointerOverTimeline;
     private double _pointerSeconds;
     private double? _pinnedSeconds;
     private Brush _accentBrush = Brushes.Aquamarine;
     private Brush _warnBrush = Brushes.Gold;
     private const int PreviewSeekIntervalMs = 110;
+    private const double MinSelectionSeconds = 0.1;
+    private const double EdgeHitPixels = 6;
+    private const double ClickSlopPixels = 4;
 
     private DateTime _lastHoverSeekUtc = DateTime.MinValue;
     private double _lastHoverSeconds = -1;
@@ -264,6 +275,8 @@ public partial class ClipEditorWindow : Window
         _focusFill = null;
         _focusLeft = null;
         _focusRight = null;
+        _handleLeft = null;
+        _handleRight = null;
 
         var duration = _media.Duration;
 
@@ -339,6 +352,15 @@ public partial class ClipEditorWindow : Window
         TimelineCanvas.Children.Add(focusFill);
         TimelineCanvas.Children.Add(focusLeft);
         TimelineCanvas.Children.Add(focusRight);
+
+        // Grabbable ends: the band edges can be dragged to re-adjust an existing selection.
+        var handleLeft = CreateHandle();
+        var handleRight = CreateHandle();
+        TimelineCanvas.Children.Add(handleLeft);
+        TimelineCanvas.Children.Add(handleRight);
+        _handleLeft = handleLeft;
+        _handleRight = handleRight;
+
         _focusFill = focusFill;
         _focusLeft = focusLeft;
         _focusRight = focusRight;
@@ -418,6 +440,56 @@ public partial class ClipEditorWindow : Window
             _focusRight.Visibility = Visibility.Visible;
             Canvas.SetLeft(_focusRight, to - 2);
         }
+
+        // Handles only exist for a real selection; the I/O preview range has nothing to grab.
+        var grabbable = _selection is not null;
+        var top = Math.Max(0, (TimelineCanvas.ActualHeight - 16) / 2);
+
+        if (_handleLeft is not null)
+        {
+            _handleLeft.Visibility = grabbable ? Visibility.Visible : Visibility.Collapsed;
+            Canvas.SetLeft(_handleLeft, from - 4);
+            Canvas.SetTop(_handleLeft, top);
+        }
+
+        if (_handleRight is not null)
+        {
+            _handleRight.Visibility = grabbable ? Visibility.Visible : Visibility.Collapsed;
+            Canvas.SetLeft(_handleRight, to - 4);
+            Canvas.SetTop(_handleRight, top);
+        }
+    }
+
+    private static Border CreateHandle() => new()
+    {
+        Width = 8,
+        Height = 16,
+        CornerRadius = new CornerRadius(3),
+        Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x5E, 0xEA, 0xD8)),
+        Visibility = Visibility.Collapsed
+    };
+
+    /// <summary>-1 when the pointer is on the selection start, 1 on the end, 0 anywhere else.</summary>
+    private int HitTestEdge(double seconds)
+    {
+        if (_media is null || _selection is not { } selection)
+        {
+            return 0;
+        }
+
+        var width = TimelineCanvas.ActualWidth;
+        if (width < 20)
+        {
+            return 0;
+        }
+
+        var tolerance = EdgeHitPixels / width * _media.Duration;
+        if (Math.Abs(seconds - selection.Start) <= tolerance)
+        {
+            return -1;
+        }
+
+        return Math.Abs(seconds - selection.End) <= tolerance ? 1 : 0;
     }
 
     private void UpdatePlayhead(double seconds)
@@ -476,8 +548,34 @@ public partial class ClipEditorWindow : Window
 
         SetPlaying(false);
         _pinnedSeconds = null;
-        _dragAnchor = SecondsAt(e.GetPosition(TimelineCanvas));
+
+        var pointer = SecondsAt(e.GetPosition(TimelineCanvas));
+        var edge = HitTestEdge(pointer);
+
+        if (edge != 0 && _selection is { } existing)
+        {
+            // Grabbing an end of the current selection adjusts it instead of starting a new one.
+            _dragging = true;
+            _edgeDrag = true;
+            _edgeIsStart = edge < 0;
+            _activeEdgeIsStart = _edgeIsStart;
+            _edgeArmed = true;
+            _edgeFixed = _edgeIsStart ? existing.End : existing.Start;
+            TimelineCanvas.CaptureMouse();
+
+            _lastHoverSeekUtc = DateTime.MinValue;
+            ScrubPreviewAt(pointer);
+            UpdateFocusGeometry();
+            UpdateSelectionUi();
+            UpdatePlayhead(pointer);
+            UpdateTimeText(pointer);
+            return;
+        }
+
+        _edgeDrag = false;
+        _dragAnchor = pointer;
         _dragging = true;
+        _selectionBeforeDrag = _selection;
         _selection = null;
         TimelineCanvas.CaptureMouse();
 
@@ -514,6 +612,7 @@ public partial class ClipEditorWindow : Window
             // While playback runs the playhead belongs to the player, not to the mouse.
             if (!_isPlaying)
             {
+                TimelineCanvas.Cursor = HitTestEdge(pointer) != 0 ? Cursors.SizeWE : Cursors.Hand;
                 UpdatePlayhead(pointer);
                 UpdateTimeText(pointer);
                 ScrubPreviewAt(pointer);
@@ -524,7 +623,25 @@ public partial class ClipEditorWindow : Window
 
         // Only the band is redrawn on every mouse event; the preview follows on the same
         // throttle as hovering, because a Media Foundation seek per event would fall behind.
-        _selection = TimeRange.Normalized(_dragAnchor, pointer);
+        if (_edgeDrag)
+        {
+            var fixedEdge = _edgeFixed;
+            _selection = _edgeIsStart
+                ? new TimeRange(
+                    Math.Clamp(pointer, 0, Math.Max(0, fixedEdge - MinSelectionSeconds)),
+                    fixedEdge)
+                : new TimeRange(
+                    fixedEdge,
+                    Math.Clamp(pointer, Math.Min(_media.Duration, fixedEdge + MinSelectionSeconds), _media.Duration));
+        }
+        else
+        {
+            // Below the slop this is a click, not a drag: the existing selection must survive it.
+            var candidate = TimeRange.Normalized(_dragAnchor, pointer);
+            var slop = ClickSlopPixels / Math.Max(1.0, TimelineCanvas.ActualWidth) * _media.Duration;
+            _selection = candidate.Duration >= slop ? candidate : null;
+        }
+
         ScrubPreviewAt(pointer);
         UpdateFocusGeometry();
         UpdateSelectionUi();
@@ -574,6 +691,8 @@ public partial class ClipEditorWindow : Window
             return;
         }
 
+        var wasEdgeDrag = _edgeDrag;
+        _edgeDrag = false;
         _dragging = false;
         if (TimelineCanvas.IsMouseCaptured)
         {
@@ -582,15 +701,30 @@ public partial class ClipEditorWindow : Window
 
         var seconds = SecondsAt(e.GetPosition(TimelineCanvas));
 
-        if (_selection is { } selection && selection.Duration >= 0.08)
+        if (wasEdgeDrag && _selection is { } adjusted)
         {
+            // Re-adjusted an existing end: keep the selection so it can be nudged again.
+            _edgeArmed = true;
+            SeekTo(_edgeIsStart ? adjusted.Start : adjusted.End);
+            RedrawTimeline();
+            UpdateSelectionUi();
+            return;
+        }
+
+        if (_selection is { } selection && selection.Duration >= MinSelectionSeconds)
+        {
+            // Whichever end the drag finished on becomes the one the arrow keys nudge.
+            _activeEdgeIsStart = _dragAnchor > seconds;
+            _edgeArmed = true;
+
             // Park the playhead on the out point so the cut can be checked right away.
             SeekTo(selection.End);
         }
         else
         {
-            // A plain click is just a seek.
-            _selection = null;
+            // A click only moves the playhead; it never throws away the current selection.
+            _selection = _selectionBeforeDrag;
+            _edgeArmed = false;
             SeekTo(seconds);
         }
 
@@ -737,6 +871,27 @@ public partial class ClipEditorWindow : Window
 
     private void Play_Click(object sender, RoutedEventArgs e) => TogglePlay();
 
+    private void Restart_Click(object sender, RoutedEventArgs e)
+    {
+        if (_media is null || _busy)
+        {
+            return;
+        }
+
+        _pinnedSeconds = null;
+        SeekTo(0);
+
+        try
+        {
+            Player.Play();
+            SetPlaying(true);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug($"再生できません: {ex.Message}");
+        }
+    }
+
     private void TogglePlay()
     {
         if (_media is null || _busy)
@@ -791,14 +946,41 @@ public partial class ClipEditorWindow : Window
 
     private void FrameForward_Click(object sender, RoutedEventArgs e) => StepFrames(1);
 
-    private void StepFrames(int delta)
+    private void StepFrames(int delta, bool coarse = false)
     {
         if (_media is null || _busy)
         {
             return;
         }
 
-        SeekTo(DisplaySeconds + (delta * _media.FrameSeconds));
+        var step = (coarse ? 10 : 1) * _media.FrameSeconds;
+
+        if (_edgeArmed && _selection is { } selection)
+        {
+            // Once an end has been grabbed (or a selection just made), the arrow keys nudge it.
+            var start = selection.Start;
+            var end = selection.End;
+
+            if (_activeEdgeIsStart)
+            {
+                start = Math.Clamp(start + (delta * step), 0, Math.Max(0, end - MinSelectionSeconds));
+            }
+            else
+            {
+                end = Math.Clamp(
+                    end + (delta * step),
+                    Math.Min(_media.Duration, start + MinSelectionSeconds),
+                    _media.Duration);
+            }
+
+            _selection = new TimeRange(start, end);
+            UpdateFocusGeometry();
+            UpdateSelectionUi();
+            SeekTo(_activeEdgeIsStart ? start : end);
+            return;
+        }
+
+        SeekTo(DisplaySeconds + (delta * step));
     }
 
     private void SeekTo(double seconds)
@@ -1145,11 +1327,11 @@ public partial class ClipEditorWindow : Window
                 e.Handled = true;
                 break;
             case Key.Left:
-                StepFrames(-1);
+                StepFrames(-1, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
                 e.Handled = true;
                 break;
             case Key.Right:
-                StepFrames(1);
+                StepFrames(1, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
                 e.Handled = true;
                 break;
             case Key.Delete:
