@@ -1103,6 +1103,29 @@ public sealed class MainViewModel : ObservableObject
         RefreshStats();
     }
 
+    /// <summary>
+    /// Records a clip that the trim editor wrote, so it shows up in the history lists.
+    /// The engine never sees it: this file came from an existing clip, not from the buffer.
+    /// </summary>
+    public void RegisterExternalClip(string path, double durationSeconds)
+    {
+        try
+        {
+            if (!System.IO.File.Exists(path))
+            {
+                return;
+            }
+
+            var info = new System.IO.FileInfo(path);
+            _library.Add(new ClipEntry(path, "trim", durationSeconds, info.Length, DateTimeOffset.Now));
+            RefreshLibrary();
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"クリップを履歴に追加できません: {ex.Message}");
+        }
+    }
+
     private void OnClipSaved(ClipSaveResult result)
     {
         _dispatcher.BeginInvoke(() =>

@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using Clyppey.App.ViewModels;
 using Clyppey.Core;
+using Clyppey.Core.Ffmpeg;
 using Clyppey.Core.Storage;
 using Microsoft.Win32;
 
@@ -110,6 +111,30 @@ public partial class MainWindow : Window
         {
             _viewModel.DeleteClip(clip);
         }
+    }
+
+    private void TrimClip_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not ClipEntry clip)
+        {
+            return;
+        }
+
+        var ffmpeg = FfmpegLocator.Find();
+        if (ffmpeg is null)
+        {
+            return;
+        }
+
+        var editor = new ClipEditorWindow(
+            clip,
+            ffmpeg,
+            (path, duration) => _viewModel.RegisterExternalClip(path, duration))
+        {
+            Owner = this
+        };
+
+        editor.ShowDialog();
     }
 
     private async void ClipList_MouseDoubleClick(object sender, MouseButtonEventArgs e)

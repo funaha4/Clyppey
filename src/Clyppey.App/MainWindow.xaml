@@ -53,8 +53,10 @@
                         </StackPanel>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="{DynamicResource Clips.Trim}" Style="{StaticResource BaseButton}"
+                                Padding="13,6" FontSize="12" Click="TrimClip_Click" Tag="{Binding}" />
                         <Button Content="{DynamicResource Clips.Open}" Style="{StaticResource BaseButton}"
-                                Padding="13,6" FontSize="12" Click="OpenClip_Click" Tag="{Binding}" />
+                                Padding="13,6" FontSize="12" Margin="4,0,0,0" Click="OpenClip_Click" Tag="{Binding}" />
                         <Button Content="{DynamicResource Clips.Folder}" Style="{StaticResource GhostButton}"
                                 Padding="11,6" FontSize="12" Margin="4,0,0,0"
                                 Click="RevealClip_Click" Tag="{Binding}" />

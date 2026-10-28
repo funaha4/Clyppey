@@ -5,6 +5,7 @@ using Clyppey.Core;
 using Clyppey.Core.Capture;
 using Clyppey.Core.Engine;
 using Clyppey.Core.Diagnostics;
+using Clyppey.Core.Editing;
 using Clyppey.Core.Ffmpeg;
 using Clyppey.Core.Native;
 using Clyppey.Core.Settings;
@@ -34,6 +35,7 @@ internal static class Program
                 "bench" => await BenchAsync(options).ConfigureAwait(false),
                 "save" => await SaveAsync(options).ConfigureAwait(false),
                 "record" => await RecordAsync(options).ConfigureAwait(false),
+                "trim" => await TrimAsync(args.Skip(1).ToArray()).ConfigureAwait(false),
                 "selftest" => await SelfTestAsync(options).ConfigureAwait(false),
                 _ => Help()
             };
@@ -44,6 +46,218 @@ internal static class Program
             Console.Error.WriteLine(ex);
             return 2;
         }
+    }
+
+    // ---------------------------------------------------------------- trim
+
+    private static async Task<int> TrimAsync(string[] argv)
+    {
+        string? source = null;
+        var removes = new List<TimeRange>();
+        var keeps = new List<TimeRange>();
+        var mode = CutMode.Exact;
+        string? outFile = null;
+        var verify = true;
+
+        for (var i = 0; i < argv.Length; i++)
+        {
+            var arg = argv[i];
+            switch (arg)
+            {
+                case "--remove":
+                case "--keep":
+                {
+                    if (i + 1 >= argv.Length || !TryParseRange(argv[i + 1], out var range))
+                    {
+                        Console.Error.WriteLine($"{arg} には 12.4-18.0 のような区間を指定します。");
+                        return 2;
+                    }
+
+                    i++;
+                    (arg == "--remove" ? removes : keeps).Add(range);
+                    break;
+                }
+
+                case "--mode":
+                {
+                    if (i + 1 >= argv.Length)
+                    {
+                        Console.Error.WriteLine("--mode には exact か fast を指定します。");
+                        return 2;
+                    }
+
+                    mode = argv[++i].Equals("fast", StringComparison.OrdinalIgnoreCase)
+                        ? CutMode.Fast
+                        : CutMode.Exact;
+                    break;
+                }
+
+                case "--out-file":
+                {
+                    if (i + 1 >= argv.Length)
+                    {
+                        Console.Error.WriteLine("--out-file には出力先を指定します。");
+                        return 2;
+                    }
+
+                    outFile = argv[++i];
+                    break;
+                }
+
+                case "--no-verify":
+                    verify = false;
+                    break;
+
+                default:
+                    if (arg.StartsWith('-'))
+                    {
+                        Console.Error.WriteLine($"不明なオプション: {arg}");
+                        return 2;
+                    }
+
+                    source ??= arg;
+                    break;
+            }
+        }
+
+        if (source is null || !File.Exists(source))
+        {
+            Console.Error.WriteLine("使い方: clyppey trim <clip.mp4> --remove 12.4-18.0 [--remove ...] [--mode exact|fast] [--out-file out.mp4]");
+            return 2;
+        }
+
+        var ffmpegPath = AppPaths.FindFfmpeg();
+        if (ffmpegPath is null)
+        {
+            Console.Error.WriteLine("ffmpeg が見つかりません。");
+            return 1;
+        }
+
+        var media = await MediaProbe.ReadAsync(ffmpegPath, source).ConfigureAwait(false);
+        if (!media.IsValid)
+        {
+            Console.Error.WriteLine($"読み込めません: {media.Error}");
+            return 1;
+        }
+
+        var cutList = new CutList();
+        foreach (var range in removes)
+        {
+            cutList.Add(range);
+        }
+
+        IReadOnlyList<TimeRange> keepRanges = keeps.Count > 0
+            ? keeps
+                .Select(k => new TimeRange(Math.Max(0, k.Start), Math.Min(media.Duration, k.End)))
+                .Where(k => k.Duration > 0.02)
+                .ToArray()
+            : cutList.Keeps(media.Duration);
+
+        if (keepRanges.Count == 0)
+        {
+            Console.Error.WriteLine("残す区間がありません。");
+            return 1;
+        }
+
+        var keyframes = await KeyframeIndex.ReadAsync(ffmpegPath, source).ConfigureAwait(false);
+
+        var output = outFile
+            ?? Path.Combine(
+                Path.GetDirectoryName(Path.GetFullPath(source)) ?? ".",
+                Path.GetFileNameWithoutExtension(source) + "_cut.mp4");
+
+        var context = new TrimContext(
+            Path.GetFullPath(source),
+            Path.GetFullPath(output),
+            Path.Combine(AppPaths.TempDir, "cut_" + Guid.NewGuid().ToString("N")[..8]),
+            keepRanges,
+            keyframes,
+            mode,
+            media.Fps,
+            media.HasAudio);
+
+        var requested = 0.0;
+        foreach (var keep in keepRanges)
+        {
+            requested += keep.Duration;
+        }
+
+        Console.WriteLine($"元       : {media.Duration:F2} 秒 / {media.Width}x{media.Height} / {media.Fps:F2} fps / 音声{(media.HasAudio ? "あり" : "なし")}");
+        Console.WriteLine($"削除     : {cutList.Removed.Count} 区間 / 残り {requested:F2} 秒");
+        Console.WriteLine(
+            keyframes.Count > 1
+                ? $"キーコード: {keyframes.Count} 個（間隔 {(keyframes[^1] - keyframes[0]) / (keyframes.Count - 1):F2} 秒）"
+                : "キーコード: 取得できませんでした（安全側に倒します）");
+        Console.WriteLine($"モード   : {(mode == CutMode.Exact ? "ぴったり（境界のみ再エンコード）" : "最速（コピーのみ）")}");
+
+        var stopwatch = Stopwatch.StartNew();
+        var lastPercent = -1;
+        var progress = new Progress<double>(value =>
+        {
+            var percent = (int)Math.Round(value * 100);
+            if (percent != lastPercent)
+            {
+                lastPercent = percent;
+                Console.Write($"\r書き出し : {percent,3}%");
+            }
+        });
+
+        var outcome = await TrimJob
+            .RunAsync(ffmpegPath, context, progress, verify)
+            .ConfigureAwait(false);
+
+        stopwatch.Stop();
+        Console.WriteLine();
+
+        if (!outcome.Success)
+        {
+            Console.Error.WriteLine($"失敗: {outcome.Error}");
+            return 1;
+        }
+
+        var sizeMb = new FileInfo(outcome.OutputPath).Length / 1048576.0;
+        Console.WriteLine($"出力     : {outcome.OutputPath}");
+        Console.WriteLine(
+            $"結果     : {outcome.DurationSeconds:F2} 秒（出力予定 {outcome.RequestedSeconds:F2} 秒 / 差 {outcome.DurationSeconds - outcome.RequestedSeconds:+0.00;-0.00} 秒）");
+        Console.WriteLine(
+            $"フレーム : {outcome.Frames:N0} 個（期待 {outcome.ExpectedFrames:N0}）/ 結合 {outcome.Junctions} 箇所 / 平均 {outcome.AverageFps:F2} fps");
+        Console.WriteLine($"レート   : 各フレームは 1/{media.Fps:F0} 秒のまま（結合部で最大 1 フレーム保持）");
+        Console.WriteLine($"サイズ   : {sizeMb:F1} MB");
+        Console.WriteLine($"所要     : {stopwatch.Elapsed.TotalSeconds:F2} 秒");
+
+        if (outcome.Warnings.Count == 0)
+        {
+            Console.WriteLine("警告     : なし");
+        }
+        else
+        {
+            foreach (var warning in outcome.Warnings)
+            {
+                Console.WriteLine($"警告     : {warning}");
+            }
+        }
+
+        var decodeWarning = outcome.Warnings.Any(w => w.StartsWith("デコード警告", StringComparison.Ordinal));
+        return decodeWarning ? 1 : 0;
+    }
+
+    private static bool TryParseRange(string text, out TimeRange range)
+    {
+        range = default;
+        var parts = text.Split('-', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2)
+        {
+            return false;
+        }
+
+        if (!double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var a) ||
+            !double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var b))
+        {
+            return false;
+        }
+
+        range = TimeRange.Normalized(a, b);
+        return range.Duration > 0.01;
     }
 
     private static int Help()
@@ -57,6 +271,8 @@ internal static class Program
               clyppey bench  [--seconds 20]     バッファリングの負荷を計測
               clyppey save   [--seconds 30] [--out <file>]   指定秒数を保存
               clyppey record [--seconds 10] [--out <file>]   指定秒数を通常録画
+              clyppey trim <clip.mp4> --remove 12.4-18.0 [--remove ...] [--mode exact|fast]
+                                                区間を削除して書き出す（再エンコードは境界のみ）
               clyppey selftest [--seconds 25]   エンドツーエンド自動検証
 
             オプション:

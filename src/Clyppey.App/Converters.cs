@@ -23,6 +23,7 @@ public sealed class ClipModeTextConverter : IValueConverter
         {
             "record" => Loc.T("Clips.ModeRecord"),
             "replay" => Loc.T("Clips.ModeReplay"),
+            "trim" => Loc.T("Clips.ModeTrim"),
             _ => value?.ToString() ?? string.Empty
         };
 

@@ -152,4 +152,34 @@
     <sys:String x:Key="Common.SecondsValue">{0} 秒</sys:String>
     <sys:String x:Key="Common.SecondsShort">{0} 秒</sys:String>
 
+    <!-- ==================== clip editor (trim) ==================== -->
+    <sys:String x:Key="Clips.Trim">詰める</sys:String>
+    <sys:String x:Key="Clips.ModeTrim">切り取り</sys:String>
+
+    <sys:String x:Key="Trim.Title">クリップを詰める</sys:String>
+    <sys:String x:Key="Trim.Close">閉じる</sys:String>
+    <sys:String x:Key="Trim.Loading">読み込み中…</sys:String>
+    <sys:String x:Key="Trim.NoPreview">この形式はプレビューできませんが、切り取りは行えます: {0}</sys:String>
+    <sys:String x:Key="Trim.NoPreviewShort">この形式はプレビューできませんが、切り取りは行えます。</sys:String>
+    <sys:String x:Key="Trim.PlayHint">再生 / 一時停止（スペース）</sys:String>
+    <sys:String x:Key="Trim.PrevFrame">1 フレーム戻る（←）</sys:String>
+    <sys:String x:Key="Trim.NextFrame">1 フレーム進む（→）</sys:String>
+    <sys:String x:Key="Trim.Hint">スペース: 再生 · I / O: 区間を削除 · ←/→: 1 フレーム</sys:String>
+    <sys:String x:Key="Trim.MarkStart">ここから削除（I）</sys:String>
+    <sys:String x:Key="Trim.MarkEnd">ここまで（O）</sys:String>
+    <sys:String x:Key="Trim.Undo">1つ戻す</sys:String>
+    <sys:String x:Key="Trim.Clear">すべて戻す</sys:String>
+    <sys:String x:Key="Trim.Removed">削除</sys:String>
+    <sys:String x:Key="Trim.KeptValue">残り {0} 秒 / 元 {1} 秒</sys:String>
+    <sys:String x:Key="Trim.Marking">{0} から削除 — O で確定</sys:String>
+    <sys:String x:Key="Trim.CutAdded">{0} 秒を削除しました（{1} 区間）</sys:String>
+    <sys:String x:Key="Trim.ModeExact">ぴったり（境界のみ再エンコード）</sys:String>
+    <sys:String x:Key="Trim.ModeFast">最速（無劣化・1 秒単位）</sys:String>
+    <sys:String x:Key="Trim.Export">切り取って保存</sys:String>
+    <sys:String x:Key="Trim.Exporting">書き出し中…</sys:String>
+    <sys:String x:Key="Trim.Done">保存しました — {0} 秒 / {1} MB</sys:String>
+    <sys:String x:Key="Trim.DoneWarn">保存しましたが注意があります: {0}</sys:String>
+    <sys:String x:Key="Trim.Failed">失敗: {0}</sys:String>
+    <sys:String x:Key="Trim.Empty">残す区間がありません。先に削除する区間を決めてください。</sys:String>
+
 </ResourceDictionary>

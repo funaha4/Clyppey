@@ -1,0 +1,151 @@
+<Window x:Class="Clyppey.App.ClipEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Clyppey"
+        Width="1180" Height="780"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BgBrush}"
+        FontFamily="{StaticResource UiFont}"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="52" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- ============================== title bar ============================== -->
+            <Grid Grid.Row="0" Background="{StaticResource NavBrush}"
+                  MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE7C1;" Style="{StaticResource Ico}" FontSize="14"
+                               Foreground="{StaticResource AccentBrush}" />
+                    <TextBlock Text="{DynamicResource Trim.Title}" FontWeight="SemiBold" FontSize="13"
+                               Margin="10,0,0,0" VerticalAlignment="Center" />
+                    <TextBlock x:Name="ClipNameText" Style="{StaticResource Caption}" Margin="12,0,0,0"
+                               VerticalAlignment="Center" MaxWidth="640" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <Button Grid.Column="2" Style="{StaticResource GhostButton}" Width="48" Height="46"
+                        Click="Close_Click" ToolTip="{DynamicResource Trim.Close}">
+                    <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="13" />
+                </Button>
+            </Grid>
+
+            <!-- ============================== preview ============================== -->
+            <Grid Grid.Row="1" Background="#FF000000">
+                <MediaElement x:Name="Player"
+                              LoadedBehavior="Manual"
+                              UnloadedBehavior="Manual"
+                              ScrubbingEnabled="True"
+                              Stretch="Uniform"
+                              MediaOpened="Player_MediaOpened"
+                              MediaFailed="Player_MediaFailed" />
+                <TextBlock x:Name="BusyText" Text="{DynamicResource Trim.Loading}"
+                           Style="{StaticResource Caption}" HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+            </Grid>
+
+            <!-- ============================== timeline ============================== -->
+            <Border Grid.Row="2" Margin="18,12,18,0" Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12">
+                <Grid ClipToBounds="True" Height="104">
+                    <Image x:Name="FilmstripImage" Stretch="Fill" Opacity="0.42" Margin="1" />
+                    <Canvas x:Name="TimelineCanvas" Background="Transparent" ClipToBounds="True"
+                            Cursor="Hand" SizeChanged="TimelineCanvas_SizeChanged"
+                            MouseLeftButtonDown="Timeline_MouseLeftButtonDown" />
+                </Grid>
+            </Border>
+
+            <!-- ============================== transport ============================== -->
+            <Grid Grid.Row="3" Margin="18,12,18,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="PlayButton" Style="{StaticResource BaseButton}" Width="48" Padding="0"
+                            Height="38" Click="Play_Click" ToolTip="{DynamicResource Trim.PlayHint}">
+                        <TextBlock x:Name="PlayGlyph" Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="13" />
+                    </Button>
+                    <Button Style="{StaticResource GhostButton}" Height="38" Padding="12,0" Margin="6,0,0,0"
+                            Click="FrameBack_Click" ToolTip="{DynamicResource Trim.PrevFrame}">
+                        <TextBlock Text="&#xE76B;" FontFamily="Segoe MDL2 Assets" FontSize="12" />
+                    </Button>
+                    <Button Style="{StaticResource GhostButton}" Height="38" Padding="12,0"
+                            Click="FrameForward_Click" ToolTip="{DynamicResource Trim.NextFrame}">
+                        <TextBlock Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" FontSize="12" />
+                    </Button>
+                    <TextBlock x:Name="TimeText" Style="{StaticResource Mono}" FontSize="13"
+                               Foreground="{StaticResource TextBrush}" Margin="12,0,0,0"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <TextBlock Grid.Column="1" Text="{DynamicResource Trim.Hint}" Style="{StaticResource Caption}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="MarkStartButton" Content="{DynamicResource Trim.MarkStart}"
+                            Style="{StaticResource BaseButton}" Padding="14,8" Click="MarkStart_Click" />
+                    <Button x:Name="MarkEndButton" Content="{DynamicResource Trim.MarkEnd}"
+                            Style="{StaticResource BaseButton}" Padding="14,8" Margin="6,0,0,0"
+                            Click="MarkEnd_Click" />
+                    <Button Content="{DynamicResource Trim.Undo}" Style="{StaticResource GhostButton}"
+                            Padding="10,8" Margin="6,0,0,0" Click="Undo_Click" />
+                    <Button Content="{DynamicResource Trim.Clear}" Style="{StaticResource GhostButton}"
+                            Padding="10,8" Click="ClearCuts_Click" />
+                </StackPanel>
+            </Grid>
+
+            <!-- ============================== export ============================== -->
+            <Grid Grid.Row="4" Margin="18,12,18,16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock x:Name="KeptText" Style="{StaticResource H2}" VerticalAlignment="Center" />
+
+                <ComboBox x:Name="ModeBox" Grid.Column="1" Width="240" Height="38" Margin="16,0,0,0"
+                          VerticalContentAlignment="Center" SelectionChanged="Mode_SelectionChanged" />
+
+                <TextBox x:Name="FileNameBox" Grid.Column="2" Height="38" Margin="12,0,12,0"
+                         VerticalContentAlignment="Center" Padding="10,0" FontFamily="{StaticResource UiFont}"
+                         FontSize="13" Background="{StaticResource SurfaceAltBrush}"
+                         Foreground="{StaticResource TextBrush}" BorderBrush="{StaticResource BorderBrush}"
+                         CaretBrush="{StaticResource AccentBrush}" />
+
+                <Button x:Name="ExportButton" Grid.Column="3" Content="{DynamicResource Trim.Export}"
+                        Style="{StaticResource PrimaryButton}" Padding="24,10" Click="Export_Click" />
+
+                <StackPanel Grid.Row="1" Grid.ColumnSpan="4" Orientation="Horizontal" Margin="0,10,0,0">
+                    <ProgressBar x:Name="ProgressBar" Width="240" Height="6" Minimum="0" Maximum="100"
+                                 Value="0" BorderThickness="0" Background="{StaticResource SurfaceAltBrush}"
+                                 Foreground="{StaticResource AccentBrush}" Visibility="Collapsed" />
+                    <TextBlock x:Name="StatusText" Style="{StaticResource Caption}" Margin="12,0,0,0"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="820" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

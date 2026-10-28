@@ -152,4 +152,34 @@
     <sys:String x:Key="Common.SecondsValue">{0} seconds</sys:String>
     <sys:String x:Key="Common.SecondsShort">{0} s</sys:String>
 
+    <!-- ==================== clip editor (trim) ==================== -->
+    <sys:String x:Key="Clips.Trim">Trim</sys:String>
+    <sys:String x:Key="Clips.ModeTrim">Trimmed</sys:String>
+
+    <sys:String x:Key="Trim.Title">Trim clip</sys:String>
+    <sys:String x:Key="Trim.Close">Close</sys:String>
+    <sys:String x:Key="Trim.Loading">Loading…</sys:String>
+    <sys:String x:Key="Trim.NoPreview">This format cannot be previewed, but it can still be cut: {0}</sys:String>
+    <sys:String x:Key="Trim.NoPreviewShort">This format cannot be previewed, but it can still be cut.</sys:String>
+    <sys:String x:Key="Trim.PlayHint">Play / pause (Space)</sys:String>
+    <sys:String x:Key="Trim.PrevFrame">Back one frame (←)</sys:String>
+    <sys:String x:Key="Trim.NextFrame">Forward one frame (→)</sys:String>
+    <sys:String x:Key="Trim.Hint">Space: play · I / O: remove a range · ←/→: one frame</sys:String>
+    <sys:String x:Key="Trim.MarkStart">Remove from here (I)</sys:String>
+    <sys:String x:Key="Trim.MarkEnd">To here (O)</sys:String>
+    <sys:String x:Key="Trim.Undo">Undo last</sys:String>
+    <sys:String x:Key="Trim.Clear">Clear all</sys:String>
+    <sys:String x:Key="Trim.Removed">Removed</sys:String>
+    <sys:String x:Key="Trim.KeptValue">{0} s left / {1} s original</sys:String>
+    <sys:String x:Key="Trim.Marking">Removing from {0} — press O to set the end</sys:String>
+    <sys:String x:Key="Trim.CutAdded">Removed {0} s ({1} ranges)</sys:String>
+    <sys:String x:Key="Trim.ModeExact">Exact (re-encode at cuts only)</sys:String>
+    <sys:String x:Key="Trim.ModeFast">Fastest (no re-encode, 1 s steps)</sys:String>
+    <sys:String x:Key="Trim.Export">Cut and save</sys:String>
+    <sys:String x:Key="Trim.Exporting">Writing…</sys:String>
+    <sys:String x:Key="Trim.Done">Saved — {0} s / {1} MB</sys:String>
+    <sys:String x:Key="Trim.DoneWarn">Saved with a warning: {0}</sys:String>
+    <sys:String x:Key="Trim.Failed">Failed: {0}</sys:String>
+    <sys:String x:Key="Trim.Empty">Nothing left to keep. Mark the ranges to remove first.</sys:String>
+
 </ResourceDictionary>

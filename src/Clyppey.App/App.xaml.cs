@@ -74,9 +74,29 @@ public partial class App : Application
 
         Log.Info($"起動: {AppPaths.AppDataRoot} (fallback={AppPaths.IsFallbackRoot}) lang={Loc.Current}");
 
+        // dev only: render the clip editor for a given clip (UI snapshot)
+        var editorClip = GetArgumentValue(e.Args, "--editor-clip");
+        if (screenshotPath is not null && editorClip is not null)
+        {
+            var clipEntry = new Clyppey.Core.Storage.ClipEntry(editorClip, "replay", 0, 0, DateTimeOffset.Now);
+            var editor = new ClipEditorWindow(
+                clipEntry,
+                Clyppey.Core.Ffmpeg.FfmpegLocator.Find() ?? string.Empty,
+                initialCuts: ParseRanges(GetArgumentValue(e.Args, "--editor-cuts")));
+            editor.Show();
+
+            if (e.Args.Any(a => string.Equals(a, "--editor-export", StringComparison.OrdinalIgnoreCase)))
+            {
+                _ = RunEditorExportAsync(editor, screenshotPath);
+                return;
+            }
+
+            CaptureEditorAndQuit(editor, screenshotPath);
+            return;
+        }
+
         var library = new ClipLibrary();
         library.Load();
-
         ViewModel = new MainViewModel(settings, library);
         _window = new MainWindow(ViewModel);
 
@@ -406,6 +426,99 @@ public partial class App : Application
 
         using var stream = File.Create(path);
         encoder.Save(stream);
+    }
+
+    private void CaptureEditorAndQuit(Window window, string path)
+    {
+        // Long enough for the probe, the keyframe index and the filmstrip to land.
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(7) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            try
+            {
+                CaptureWindowToFile(window, path);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("エディタのスクリーンショットに失敗", ex);
+            }
+
+            _quitting = true;
+            Shutdown();
+        };
+        timer.Start();
+    }
+
+    /// <summary>Dev only: drives the editor's export path end to end and reports the outcome.</summary>
+    private async Task RunEditorExportAsync(ClipEditorWindow editor, string screenshotPath)
+    {
+        try
+        {
+            var status = await editor.ExportForTestAsync().ConfigureAwait(true);
+            Log.Info($"editor export: {status}");
+            Console.Error.WriteLine($"editor export: {status}");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("エディタの書き出し検証に失敗", ex);
+            Console.Error.WriteLine($"editor export failed: {ex.Message}");
+        }
+
+        await Task.Delay(400).ConfigureAwait(true);
+        try
+        {
+            CaptureWindowToFile(editor, screenshotPath);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("エディタのスクリーンショットに失敗", ex);
+        }
+
+        _quitting = true;
+        Shutdown();
+    }
+
+    private static void CaptureWindowToFile(Window window, string path)
+    {
+        window.UpdateLayout();
+        var width = (int)Math.Max(1, window.ActualWidth);
+        var height = (int)Math.Max(1, window.ActualHeight);
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(window);
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
+
+    private static IReadOnlyList<Clyppey.Core.Editing.TimeRange>? ParseRanges(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var ranges = new List<Clyppey.Core.Editing.TimeRange>();
+        foreach (var part in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var bounds = part.Split('-', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (bounds.Length == 2 &&
+                double.TryParse(bounds[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var a) &&
+                double.TryParse(bounds[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var b))
+            {
+                ranges.Add(Clyppey.Core.Editing.TimeRange.Normalized(a, b));
+            }
+        }
+
+        return ranges.Count > 0 ? ranges : null;
     }
 
     private static string? GetArgumentValue(string[] args, string name)
