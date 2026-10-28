@@ -83,7 +83,14 @@ public partial class App : Application
                 clipEntry,
                 Clyppey.Core.Ffmpeg.FfmpegLocator.Find() ?? string.Empty,
                 initialCuts: ParseRanges(GetArgumentValue(e.Args, "--editor-cuts")),
-                initialSelection: ParseRanges(GetArgumentValue(e.Args, "--editor-select"))?.FirstOrDefault());
+                initialSelection: ParseRanges(GetArgumentValue(e.Args, "--editor-select"))?.FirstOrDefault(),
+                initialPin: double.TryParse(
+                    GetArgumentValue(e.Args, "--editor-pin"),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var pinSeconds)
+                    ? pinSeconds
+                    : null);
             editor.Show();
 
             if (e.Args.Any(a => string.Equals(a, "--editor-export", StringComparison.OrdinalIgnoreCase)))

@@ -67,6 +67,7 @@
                     <Canvas x:Name="TimelineCanvas" Background="Transparent" ClipToBounds="True"
                             Cursor="Hand" SizeChanged="TimelineCanvas_SizeChanged"
                             MouseLeftButtonDown="Timeline_MouseLeftButtonDown"
+                            MouseRightButtonDown="Timeline_MouseRightButtonDown"
                             MouseMove="Timeline_MouseMove"
                             MouseLeftButtonUp="Timeline_MouseLeftButtonUp"
                             MouseLeave="Timeline_MouseLeave"

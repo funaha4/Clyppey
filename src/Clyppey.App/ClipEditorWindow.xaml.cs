@@ -29,6 +29,7 @@ public partial class ClipEditorWindow : Window
     private readonly Action<string, double>? _onSaved;
     private readonly IReadOnlyList<TimeRange>? _initialCuts;
     private readonly TimeRange? _initialSelection;
+    private readonly double? _initialPin;
     private readonly CutList _cuts = new();
     private readonly DispatcherTimer _timer;
     private readonly TaskCompletionSource<bool> _loadedSignal = new();
@@ -45,6 +46,9 @@ public partial class ClipEditorWindow : Window
     private double _dragAnchor;
     private bool _pointerOverTimeline;
     private double _pointerSeconds;
+    private double? _pinnedSeconds;
+    private Brush _accentBrush = Brushes.Aquamarine;
+    private Brush _warnBrush = Brushes.Gold;
     private const int PreviewSeekIntervalMs = 110;
 
     private DateTime _lastHoverSeekUtc = DateTime.MinValue;
@@ -60,7 +64,8 @@ public partial class ClipEditorWindow : Window
         string ffmpegPath,
         Action<string, double>? onSaved = null,
         IReadOnlyList<TimeRange>? initialCuts = null,
-        TimeRange? initialSelection = null)
+        TimeRange? initialSelection = null,
+        double? initialPin = null)
     {
         InitializeComponent();
 
@@ -69,9 +74,12 @@ public partial class ClipEditorWindow : Window
         _onSaved = onSaved;
         _initialCuts = initialCuts;
         _initialSelection = initialSelection;
+        _initialPin = initialPin;
 
         ClipNameText.Text = clip.FileName;
         FileNameBox.Text = Path.GetFileNameWithoutExtension(clip.FileName) + "_cut.mp4";
+        _accentBrush = (Brush)FindResource("AccentBrush");
+        _warnBrush = (Brush)FindResource("WarnBrush");
 
         ModeBox.Items.Add(Loc.T("Trim.ModeExact"));
         ModeBox.Items.Add(Loc.T("Trim.ModeFast"));
@@ -111,7 +119,9 @@ public partial class ClipEditorWindow : Window
     /// made the playhead step along at about 9 Hz while the cursor moved smoothly.
     /// </summary>
     private double DisplaySeconds =>
-        _pointerOverTimeline && !_dragging && !_isPlaying ? _pointerSeconds : CurrentSeconds;
+        _pinnedSeconds is { } pinned
+            ? Math.Clamp(pinned, 0, _media?.Duration ?? pinned)
+            : _pointerOverTimeline && !_dragging && !_isPlaying ? _pointerSeconds : CurrentSeconds;
 
     // ---------------------------------------------------------------- loading
 
@@ -164,6 +174,12 @@ public partial class ClipEditorWindow : Window
             {
                 _selection = initial;
                 UpdateSelectionUi();
+            }
+
+            if (_initialPin is { } pin)
+            {
+                _pinnedSeconds = pin;
+                ForcePreviewAt(pin);
             }
 
             RedrawTimeline();
@@ -421,6 +437,9 @@ public partial class ClipEditorWindow : Window
 
         _playhead.Visibility = Visibility.Visible;
 
+        // A pinned playhead is amber and says so in the readout; colour alone would not carry it.
+        _playhead.Background = _pinnedSeconds is not null ? _warnBrush : _accentBrush;
+
         var width = TimelineCanvas.ActualWidth;
         if (width < 20)
         {
@@ -456,6 +475,7 @@ public partial class ClipEditorWindow : Window
         }
 
         SetPlaying(false);
+        _pinnedSeconds = null;
         _dragAnchor = SecondsAt(e.GetPosition(TimelineCanvas));
         _dragging = true;
         _selection = null;
@@ -468,12 +488,18 @@ public partial class ClipEditorWindow : Window
         UpdateFocusGeometry();
         UpdateSelectionUi();
         UpdatePlayhead(_dragAnchor);
-        TimeText.Text = $"{MMss(_dragAnchor)} / {MMss(_media.Duration)}";
+        UpdateTimeText(_dragAnchor);
     }
 
     private void Timeline_MouseMove(object sender, MouseEventArgs e)
     {
         if (_media is null)
+        {
+            return;
+        }
+
+        // A pinned playhead ignores the mouse entirely until it is released.
+        if (_pinnedSeconds is not null)
         {
             return;
         }
@@ -489,7 +515,7 @@ public partial class ClipEditorWindow : Window
             if (!_isPlaying)
             {
                 UpdatePlayhead(pointer);
-                TimeText.Text = $"{MMss(pointer)} / {MMss(_media.Duration)}";
+                UpdateTimeText(pointer);
                 ScrubPreviewAt(pointer);
             }
 
@@ -503,7 +529,7 @@ public partial class ClipEditorWindow : Window
         UpdateFocusGeometry();
         UpdateSelectionUi();
         UpdatePlayhead(pointer);
-        TimeText.Text = $"{MMss(pointer)} / {MMss(_media.Duration)}";
+        UpdateTimeText(pointer);
     }
 
     /// <summary>
@@ -597,6 +623,83 @@ public partial class ClipEditorWindow : Window
         OnTick();
     }
 
+    /// <summary>
+    /// Right-click pins the playhead where it is: the pointer stops dragging both the line and
+    /// the preview along, so a spot can be held while looking around it. Right-click again
+    /// (or click, seek, or play) releases it.
+    /// </summary>
+    private void Timeline_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_media is null || _busy)
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        if (_pinnedSeconds is not null)
+        {
+            Unpin();
+            return;
+        }
+
+        var seconds = SecondsAt(e.GetPosition(TimelineCanvas));
+        _pinnedSeconds = seconds;
+        _pointerOverTimeline = false;
+        ForcePreviewAt(seconds);
+        UpdatePlayhead(seconds);
+        UpdateTimeText(seconds);
+        UpdateFocusGeometry();
+    }
+
+    private void Unpin()
+    {
+        if (_pinnedSeconds is null)
+        {
+            return;
+        }
+
+        _pinnedSeconds = null;
+
+        // Let the next hover seek through immediately instead of waiting out the throttle.
+        _lastHoverSeconds = -1;
+        _lastHoverSeekUtc = DateTime.MinValue;
+        OnTick();
+    }
+
+    /// <summary>Puts the preview on a specific frame, bypassing the hover throttle.</summary>
+    private void ForcePreviewAt(double seconds)
+    {
+        if (_media is null)
+        {
+            return;
+        }
+
+        _lastHoverSeconds = seconds;
+        _lastHoverSeekUtc = DateTime.UtcNow;
+
+        try
+        {
+            Player.Position = TimeSpan.FromSeconds(Math.Clamp(seconds, 0, _media.Duration));
+        }
+        catch (Exception)
+        {
+            // Position is only settable once the media is open.
+        }
+    }
+
+    private void UpdateTimeText(double seconds)
+    {
+        if (_media is null)
+        {
+            return;
+        }
+
+        TimeText.Text = _pinnedSeconds is not null
+            ? Loc.F("Trim.PinnedTime", MMss(seconds), MMss(_media.Duration))
+            : $"{MMss(seconds)} / {MMss(_media.Duration)}";
+    }
+
     private void OnTick()
     {
         if (_media is null)
@@ -613,7 +716,7 @@ public partial class ClipEditorWindow : Window
         var seconds = DisplaySeconds;
         UpdatePlayhead(seconds);
         UpdateFocusGeometry();
-        TimeText.Text = $"{MMss(seconds)} / {MMss(_media.Duration)}";
+        UpdateTimeText(seconds);
 
         if (_isPlaying && Player.Position.TotalSeconds >= _media.Duration - 0.05)
         {
@@ -646,6 +749,9 @@ public partial class ClipEditorWindow : Window
             SetPlaying(false);
             return;
         }
+
+        // Playback owns the playhead again.
+        _pinnedSeconds = null;
 
         if (Player.Position.TotalSeconds >= _media.Duration - 0.1)
         {
@@ -701,6 +807,7 @@ public partial class ClipEditorWindow : Window
 
         // From here on the player is the truth again, so the playhead stops tracking the cursor.
         _pointerOverTimeline = false;
+        _pinnedSeconds = null;
 
         try
         {
