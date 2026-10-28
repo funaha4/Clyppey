@@ -61,7 +61,6 @@ public partial class ClipEditorWindow : Window
     private Brush _accentBrush = Brushes.Aquamarine;
     private Brush _warnBrush = Brushes.Gold;
     private const int PreviewSeekIntervalMs = 110;
-    private const double MinSelectionSeconds = 0.1;
     private const double EdgeHitPixels = 6;
     private const double ClickSlopPixels = 4;
 
@@ -686,6 +685,21 @@ public partial class ClipEditorWindow : Window
         return width < 20 ? 0 : EdgeHitPixels / width * ViewLength;
     }
 
+    /// <summary>How far a press has to travel before it becomes a drag instead of a click.</summary>
+    private double ClickSlopSeconds() =>
+        ClickSlopPixels / Math.Max(1.0, TimelineCanvas.ActualWidth) * ViewLength;
+
+    /// <summary>
+    /// Smallest range the editor will produce by dragging an end or nudging with the arrows: one
+    /// frame, because that is the smallest thing a cut can express.
+    ///
+    /// This used to be a flat 0.1 s. A duration is not a size on screen, so zooming in turned it
+    /// into hundreds of pixels: the bar could show 0.5 s, the minimum was 0.1 s, and every drag
+    /// short enough to be drawn was below the minimum and got thrown away on release. The end
+    /// handles could not be pulled closer than a fifth of the visible window either.
+    /// </summary>
+    private double MinRangeSeconds() => Math.Max(_media?.FrameSeconds ?? (1.0 / 60.0), 0.001);
+
     /// <summary>Shows [start, start + length] and refreshes everything that depends on it.</summary>
     private void SetView(double start, double length)
     {
@@ -949,9 +963,13 @@ public partial class ClipEditorWindow : Window
         UpdateZoomUi();
     }
 
-    /// <summary>Whatever the user is currently pointing at (a dragged or adjusted range).</summary>
+    /// <summary>
+    /// Whatever the user is currently pointing at (a dragged or adjusted range). Any non-zero
+    /// range counts: with the timeline zoomed in, half a frame is still a visible band, and
+    /// hiding it made a small drag look like nothing had happened.
+    /// </summary>
     private TimeRange? FocusRange =>
-        _selection is { } selection && selection.Duration > 0.01 ? selection : null;
+        _selection is { } selection && selection.Duration > 0 ? selection : null;
 
     private void UpdateFocusGeometry()
     {
@@ -1229,20 +1247,20 @@ public partial class ClipEditorWindow : Window
         if (_edgeDrag)
         {
             var fixedEdge = _edgeFixed;
+            var minimum = MinRangeSeconds();
             _selection = _edgeIsStart
                 ? new TimeRange(
-                    Math.Clamp(pointer, 0, Math.Max(0, fixedEdge - MinSelectionSeconds)),
+                    Math.Clamp(pointer, 0, Math.Max(0, fixedEdge - minimum)),
                     fixedEdge)
                 : new TimeRange(
                     fixedEdge,
-                    Math.Clamp(pointer, Math.Min(_media.Duration, fixedEdge + MinSelectionSeconds), _media.Duration));
+                    Math.Clamp(pointer, Math.Min(_media.Duration, fixedEdge + minimum), _media.Duration));
         }
         else
         {
             // Below the slop this is a click, not a drag: the existing selection must survive it.
             var candidate = TimeRange.Normalized(_dragAnchor, pointer);
-            var slop = ClickSlopPixels / Math.Max(1.0, TimelineCanvas.ActualWidth) * ViewLength;
-            _selection = candidate.Duration >= slop ? candidate : null;
+            _selection = candidate.Duration >= ClickSlopSeconds() ? candidate : null;
         }
 
         ScrubPreviewAt(pointer);
@@ -1315,7 +1333,9 @@ public partial class ClipEditorWindow : Window
             return;
         }
 
-        if (_selection is { } selection && selection.Duration >= MinSelectionSeconds)
+        // The drag-versus-click decision is a distance on screen, so it stays the same at every
+        // zoom level. Comparing against a duration here is what used to swallow zoomed-in drags.
+        if (_selection is { } selection && selection.Duration >= ClickSlopSeconds())
         {
             // Whichever end the drag finished on becomes the one the arrow keys nudge.
             _activeEdgeIsStart = _dragAnchor > seconds;
@@ -1667,13 +1687,13 @@ public partial class ClipEditorWindow : Window
 
             if (_activeEdgeIsStart)
             {
-                start = Math.Clamp(start + (delta * step), 0, Math.Max(0, end - MinSelectionSeconds));
+                start = Math.Clamp(start + (delta * step), 0, Math.Max(0, end - MinRangeSeconds()));
             }
             else
             {
                 end = Math.Clamp(
                     end + (delta * step),
-                    Math.Min(_media.Duration, start + MinSelectionSeconds),
+                    Math.Min(_media.Duration, start + MinRangeSeconds()),
                     _media.Duration);
             }
 
