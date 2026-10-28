@@ -67,10 +67,11 @@ public partial class ClipEditorWindow : Window
 
     // Timeline zoom + filmstrip geometry.
     private const double MinViewSeconds = 0.5;      // closest the timeline can zoom in
-    private const double StripCellPixels = 18;      // screen width one thumbnail should cover
-    private const int MaxStripBitmapWidth = 15_000; // stays inside WPF's 16k texture limit
-    private const int MaxStripThumbs = 240;
-    private const double StripKeyframeOnlyAbove = 0.75;  // seconds/thumb where decoding all frames is waste
+    private const double StripCellPixels = 26;      // screen width one thumbnail should cover
+    private const int MaxStripCells = 44;
+    private const int SeekCellsCap = 20;            // wider windows get fewer, bigger cells
+    private const int SeekRuns = 5;                 // ffmpeg runs in flight for a seeking strip
+    private const double SeekWindowSeconds = 12;    // above this, sample by seeking not decoding
 
     private DateTime _lastHoverSeekUtc = DateTime.MinValue;
     private double _lastHoverSeconds = -1;
@@ -92,7 +93,9 @@ public partial class ClipEditorWindow : Window
     private WriteableBitmap? _stripBitmap;
     private double _stripStart;
     private double _stripEnd;
+    private int _stripCells;
     private bool _stripComplete;
+    private bool _stripFailed;
     private bool _stripBuilding;
     private bool _stripDirty;
     private DispatcherTimer? _stripDebounce;
@@ -304,15 +307,21 @@ public partial class ClipEditorWindow : Window
             _loadedSignal.TrySetResult(true);
         }
     }
-
     /// <summary>
     /// Thumbnails for the visible window, so the kills can be spotted without scrubbing.
     ///
-    /// The strip used to be one ffmpeg run over the whole clip ("fps=N,tile=Nx1"), which had to
-    /// decode every frame before anything appeared: 3.6 s for a 60 s clip, and nothing on screen
-    /// while it ran. Here the window is cut into a few short runs, each painted into the bitmap
-    /// as it arrives, so the left edge is visible in about a third of a second and the rest fills
-    /// in. Zooming only re-reads the visible part of the file, which is why it stays responsive.
+    /// The first two attempts both keyed off one fact that turned out to be the whole problem:
+    /// they decoded the clip end to end. "fps=N,tile=Nx1" over the whole file decodes every frame
+    /// and only emits an image once every tile is ready (3.6 s of blank bar for a 60 s clip, about
+    /// 10 s for a 4 minute one), and splitting it into chunks only moved the wait around, because
+    /// a chunk still reads (and decodes) its own seconds of video.
+    ///
+    /// So the wide case no longer reads the file at all: every cell gets its own "-ss", which
+    /// makes the demuxer jump straight to the surrounding keyframe, a few of those travel
+    /// together in one ffmpeg run, and the runs go out in parallel. The cost then depends on the
+    /// number of cells and not on the length of the clip, which is what makes zooming and long
+    /// clips bearable. Narrow windows are cheap to decode outright, so those keep real frames
+    /// instead of keyframe samples.
     /// </summary>
     private async Task EnsureFilmstripAsync(bool force = false)
     {
@@ -365,8 +374,8 @@ public partial class ClipEditorWindow : Window
     /// <summary>True when the current strip does not cover the view, or is too coarse for it.</summary>
     private bool StripNeedsRebuild()
     {
-        if (_stripBitmap is null || !_stripComplete || _stripEnd - _stripStart <= 0.001
-            || _media is not { IsValid: true } media)
+        if (_stripBitmap is null || !_stripComplete || _stripFailed
+            || _stripEnd - _stripStart <= 0.001 || _stripCells <= 0)
         {
             return true;
         }
@@ -377,56 +386,29 @@ public partial class ClipEditorWindow : Window
             return true;
         }
 
-        // Both sides in thumbnails per second: the bitmap one has to be divided by the thumbnail
-        // width, or a full-view strip would look dense enough for any zoom level.
-        var cellsPerSecond = _stripBitmap.PixelWidth
-            / (double)PlannedThumbSize(media).Width
-            / (_stripEnd - _stripStart);
+        // Both sides in cells per second, so a wide strip cannot look dense enough for a zoom.
+        var have = _stripCells / (_stripEnd - _stripStart);
+        var want = PlannedCellCount() / Math.Max(0.2, _viewEnd - _viewStart);
 
-        return cellsPerSecond < (1.0 / PlannedSecondsPerThumb()) * 0.95;
+        return have < want * 0.95;
     }
 
-    private double PlannedSecondsPerThumb()
+    private int PlannedCellCount()
     {
-        var span = Math.Max(0.2, _viewEnd - _viewStart);
-        return span / Math.Max(2, PlannedThumbCount());
-    }
-
-    private int PlannedThumbCount()
-    {
-        if (_media is not { IsValid: true } media)
-        {
-            return 8;
-        }
-
         var byPixels = (int)Math.Round(TimelineCanvas.ActualWidth / StripCellPixels);
-        var byTexture = Math.Max(8, (int)(MaxStripBitmapWidth / (double)PlannedThumbSize(media).Width));
-
-        return Math.Clamp(byPixels, 8, Math.Min(MaxStripThumbs, byTexture));
-    }
-
-    /// <summary>
-    /// One thumbnail in pixels: as tall as the bar so the strip is never upscaled (it is drawn
-    /// squashed horizontally, which is what gives the strip its smear), and frame-shaped so the
-    /// picture is not distorted on top of that.
-    /// </summary>
-    private (int Width, int Height) PlannedThumbSize(MediaInfo media)
-    {
-        var height = Math.Clamp((int)Math.Round(TimelineCanvas.ActualHeight) - 2, 16, 200);
-        var aspect = media.Width / (double)Math.Max(1, media.Height);
-        var width = Math.Clamp((int)Math.Round(height * aspect), 8, 640);
-        return (width, height);
+        return Math.Clamp(byPixels, 8, MaxStripCells);
     }
 
     private async Task RenderFilmstripAsync()
     {
-        if (_media is not { IsValid: true } media)
+        if (_media is not { IsValid: true })
         {
             return;
         }
 
-        var width = TimelineCanvas.ActualWidth;
-        if (width < 40)
+        var barWidth = TimelineCanvas.ActualWidth;
+        var barHeight = TimelineCanvas.ActualHeight;
+        if (barWidth < 40 || barHeight < 16)
         {
             return;
         }
@@ -434,104 +416,181 @@ public partial class ClipEditorWindow : Window
         var start = _viewStart;
         var end = _viewEnd;
         var span = Math.Max(0.2, end - start);
-        var thumbs = PlannedThumbCount();
-        var secondsPerThumb = span / thumbs;
-        var thumb = PlannedThumbSize(media);
+        var cells = PlannedCellCount();
+
+        // Above this window the clip is cheaper to sample by seeking than to decode.
+        var bySeeking = span > SeekWindowSeconds;
+        if (bySeeking)
+        {
+            cells = Math.Min(cells, SeekCellsCap);
+        }
+
+        var cellWidth = Math.Clamp((int)Math.Round(barWidth / cells), 6, 256);
+        var cellHeight = Math.Clamp((int)Math.Round(barHeight) - 2, 16, 200);
 
         var bitmap = new WriteableBitmap(
-            thumbs * thumb.Width, thumb.Height, 96, 96, PixelFormats.Bgra32, null);
+            cells * cellWidth, cellHeight, 96, 96, PixelFormats.Bgra32, null);
 
-        // Swap the strip in straight away: the unfilled part is transparent, so the bar keeps
-        // its normal surface and the thumbnails fill it in from the left. "Complete" only means
-        // every chunk landed; until then the next request must rebuild rather than trust it.
-        _stripBitmap = bitmap;
-        _stripStart = start;
-        _stripEnd = end;
-        _stripComplete = false;
-        FilmstripImage.Source = bitmap;
-        UpdateStripGeometry();
+        // The old strip stays on screen until the first new cells land, so zooming never blanks
+        // the bar: a repositioned stale strip beats a hole.
+        var published = false;
 
-        // Long windows sample keyframes only (the capture writes one per second), which turns a
-        // full-frame decode into a handful of frames. Short windows are cheap anyway and need
-        // real frames to stay sharp, so they decode everything.
-        var keyframeOnly = secondsPerThumb >= StripKeyframeOnlyAbove;
+        void Publish()
+        {
+            if (published)
+            {
+                return;
+            }
 
-        var chunks = Math.Clamp((int)Math.Round(span / 7.0), 1, 8);
-        var thumbsPerChunk = (int)Math.Ceiling(thumbs / (double)chunks);
+            published = true;
+            _stripBitmap = bitmap;
+            _stripStart = start;
+            _stripEnd = end;
+            _stripCells = cells;
+            FilmstripImage.Source = bitmap;
+            UpdateStripGeometry();
+        }
 
         Directory.CreateDirectory(AppPaths.TempDir);
 
-        for (var first = 0; first < thumbs; first += thumbsPerChunk)
+        if (!bySeeking)
         {
-            var count = Math.Min(thumbsPerChunk, thumbs - first);
-            var chunkStart = start + (first * secondsPerThumb);
-            var chunkSeconds = count * secondsPerThumb;
             var file = Path.Combine(AppPaths.TempDir, $"strip_{Guid.NewGuid():N}.png");
-
-            var rate = (1.0 / secondsPerThumb).ToString("0.######", CultureInfo.InvariantCulture);
-            var filters = $"fps={rate},scale={thumb.Width}:{thumb.Height},tile={count}x1";
-
-            var args = new List<string>
-            {
-                "-y", "-v", "error", "-nostdin",
-                "-ss", chunkStart.ToString("0.###", CultureInfo.InvariantCulture)
-            };
-
-            if (keyframeOnly)
-            {
-                args.Add("-skip_frame");
-                args.Add("nokey");
-            }
-
-            args.Add("-i");
-            args.Add(_clip.Path);
-            args.Add("-t");
-            args.Add((chunkSeconds + 0.5).ToString("0.###", CultureInfo.InvariantCulture));
-            args.Add("-an");
-            args.Add("-vf");
-            args.Add(filters);
-            args.Add("-frames:v");
-            args.Add("1");
-            args.Add(file);
-
             try
             {
-                var (success, error) = await ProcessRunner.RunAsync(_ffmpegPath, args, 20_000).ConfigureAwait(true);
-                if (_stripDirty)
+                if (await RenderDecodedStripAsync(start, span, cells, cellWidth, cellHeight, file)
+                        .ConfigureAwait(true))
                 {
-                    // The user moved the view; this chunk is already obsolete.
-                    return;
+                    PaintStripInto(bitmap, file, 0, cells * cellWidth);
+                    Publish();
                 }
-
-                if (!success || !File.Exists(file))
-                {
-                    Log.Debug($"フィルムストリップの一部を作れません: {error}");
-                    continue;
-                }
-
-                PaintStripChunk(bitmap, file, first * thumb.Width, count, thumb.Width, thumb.Height);
             }
             finally
             {
-                try
-                {
-                    if (File.Exists(file))
-                    {
-                        File.Delete(file);
-                    }
-                }
-                catch (Exception)
-                {
-                    // A leftover temp image is harmless.
-                }
+                TryDelete(file);
+            }
+
+            _stripComplete = published;
+            _stripFailed = !published;
+            return;
+        }
+
+        // One run per group of cells, all in flight at once. Awaiting them in completion order is
+        // what fills the bar from left to right instead of in one jump at the end.
+        var perRun = (int)Math.Ceiling(cells / (double)SeekRuns);
+        var runs = new List<(int Left, int Width, Task<string?> Run)>();
+
+        for (var first = 0; first < cells; first += perRun)
+        {
+            var count = Math.Min(perRun, cells - first);
+            var file = Path.Combine(AppPaths.TempDir, $"strip_{Guid.NewGuid():N}.png");
+            runs.Add((first * cellWidth, count * cellWidth, RenderSeekStripAsync(
+                start, span, cells, first, count, cellWidth, cellHeight, file)));
+        }
+
+        while (runs.Count > 0)
+        {
+            var finished = await Task.WhenAny(runs.Select(run => run.Run)).ConfigureAwait(true);
+            var index = runs.FindIndex(run => run.Run == finished);
+            var (left, width, _) = runs[index];
+            runs.RemoveAt(index);
+
+            var file = await finished.ConfigureAwait(true);
+            if (file is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                PaintStripInto(bitmap, file, left, width);
+                Publish();
+            }
+            finally
+            {
+                TryDelete(file);
             }
         }
 
-        _stripComplete = true;
+        _stripComplete = published;
+        _stripFailed = !published;
     }
 
-    private static void PaintStripChunk(
-        WriteableBitmap bitmap, string file, int left, int expected, int thumbWidth, int thumbHeight)
+    /// <summary>Cells for a wide window: one seek each, several per ffmpeg run.</summary>
+    private async Task<string?> RenderSeekStripAsync(
+        double start, double span, int cells, int first, int count, int width, int height, string file)
+    {
+        var step = span / cells;
+        var args = new List<string> { "-y", "-v", "error", "-nostdin" };
+
+        for (var i = 0; i < count; i++)
+        {
+            var seconds = start + ((first + i + 0.5) * step);
+            args.Add("-ss");
+            args.Add(seconds.ToString("0.###", CultureInfo.InvariantCulture));
+            args.Add("-i");
+            args.Add(_clip.Path);
+        }
+
+        args.Add("-an");
+
+        var filters = new List<string>(count + 1);
+        var stack = new List<string>(count);
+        for (var i = 0; i < count; i++)
+        {
+            filters.Add($"[{i}:v]trim=end_frame=1,scale={width}:{height}:flags=area,setsar=1[v{i}]");
+            stack.Add($"[v{i}]");
+        }
+
+        filters.Add($"{string.Join(string.Empty, stack)}concat=n={count}:v=1:a=0,tile={count}x1[o]");
+
+        args.Add("-filter_complex");
+        args.Add(string.Join(";", filters));
+        args.Add("-map");
+        args.Add("[o]");
+        args.Add("-frames:v");
+        args.Add("1");
+        args.Add(file);
+
+        var (success, error) = await ProcessRunner.RunAsync(_ffmpegPath, args, 20_000).ConfigureAwait(true);
+        if (!success || !File.Exists(file))
+        {
+            Log.Debug($"フィルムストリップの一部を作れません: {error}");
+            return null;
+        }
+
+        return file;
+    }
+
+    /// <summary>Cells for a narrow window: one pass over just those seconds.</summary>
+    private async Task<bool> RenderDecodedStripAsync(
+        double start, double span, int cells, int width, int height, string file)
+    {
+        var rate = (cells / span).ToString("0.######", CultureInfo.InvariantCulture);
+
+        var args = new List<string>
+        {
+            "-y", "-v", "error", "-nostdin",
+            "-ss", start.ToString("0.###", CultureInfo.InvariantCulture),
+            "-i", _clip.Path,
+            "-t", (span + 0.4).ToString("0.###", CultureInfo.InvariantCulture),
+            "-an",
+            "-vf", $"fps={rate},scale={width}:{height}:flags=area,tile={cells}x1",
+            "-frames:v", "1",
+            file
+        };
+
+        var (success, error) = await ProcessRunner.RunAsync(_ffmpegPath, args, 20_000).ConfigureAwait(true);
+        if (!success || !File.Exists(file))
+        {
+            Log.Debug($"フィルムストリップを作れません: {error}");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static void PaintStripInto(WriteableBitmap bitmap, string file, int left, int expectedWidth)
     {
         var image = new BitmapImage();
         image.BeginInit();
@@ -540,15 +599,12 @@ public partial class ClipEditorWindow : Window
         image.EndInit();
         image.Freeze();
 
-        // A short chunk (end of the clip) yields fewer tiles than planned; copy what exists.
-        var copyWidth = Math.Min(image.PixelWidth, expected * thumbWidth);
-        var copyHeight = Math.Min(image.PixelHeight, thumbHeight);
-        if (copyWidth <= 0 || copyHeight <= 0 || left >= bitmap.PixelWidth)
+        var copyWidth = Math.Min(Math.Min(image.PixelWidth, expectedWidth), bitmap.PixelWidth - left);
+        var copyHeight = Math.Min(image.PixelHeight, bitmap.PixelHeight);
+        if (copyWidth <= 0 || copyHeight <= 0)
         {
             return;
         }
-
-        copyWidth = Math.Min(copyWidth, bitmap.PixelWidth - left);
 
         BitmapSource source = image;
         if (image.Format != PixelFormats.Bgra32)
@@ -564,6 +620,22 @@ public partial class ClipEditorWindow : Window
         source.CopyPixels(new Int32Rect(0, 0, copyWidth, copyHeight), buffer, stride, 0);
         bitmap.WritePixels(new Int32Rect(left, 0, copyWidth, copyHeight), buffer, stride, 0);
     }
+
+    private static void TryDelete(string file)
+    {
+        try
+        {
+            if (File.Exists(file))
+            {
+                File.Delete(file);
+            }
+        }
+        catch (Exception)
+        {
+            // A leftover temp image is harmless.
+        }
+    }
+
 
     /// <summary>Places the strip over the window it was rendered for, which moves as the view does.</summary>
     private void UpdateStripGeometry()
@@ -740,6 +812,9 @@ public partial class ClipEditorWindow : Window
     private void RequestFilmstrip()
     {
         _stripDirty = true;
+
+        // A failed render blocks retries until the view changes again, which is what this is.
+        _stripFailed = false;
 
         if (_stripDebounce is null)
         {
