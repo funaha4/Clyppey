@@ -93,6 +93,7 @@
     <sys:String x:Key="Settings.KeyUnsupported">このキーは登録できません（Fキー・文字・数字をお使いください）</sys:String>
     <sys:String x:Key="Settings.KeyNotDetected">検出できません（他のアプリが使用中かもしれません）</sys:String>
     <sys:String x:Key="Settings.Update">アップデート</sys:String>
+    <sys:String x:Key="Settings.DesktopLevel">デスクトップ音声のレベル</sys:String>
     <sys:String x:Key="Settings.UpdateCheck">更新を確認</sys:String>
     <sys:String x:Key="Settings.UpdateApply">アップデート</sys:String>
     <sys:String x:Key="Settings.UpdateChecking">確認しています…</sys:String>

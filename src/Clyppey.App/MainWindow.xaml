@@ -565,6 +565,17 @@
                                               IsChecked="{Binding DesktopAudioEnabled, Mode=TwoWay}" />
                                     <ComboBox Margin="0,8,0,0" ItemsSource="{Binding AudioDevices}"
                                               SelectedItem="{Binding SelectedAudioDevice, Mode=TwoWay}" />
+                                    <Grid Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{DynamicResource Settings.DesktopLevel}"
+                                                   Style="{StaticResource FieldLabel}" />
+                                        <ProgressBar Grid.Column="1" Height="8" Maximum="1"
+                                                     Value="{Binding DesktopLevel, Mode=OneWay}"
+                                                     VerticalAlignment="Center" />
+                                    </Grid>
                                     <CheckBox Content="{DynamicResource Settings.MicrophoneOn}" Margin="0,14,0,0"
                                               IsChecked="{Binding MicrophoneEnabled, Mode=TwoWay}" />
                                     <TextBlock Text="{DynamicResource Settings.NoMicrophone}" Margin="0,6,0,0">

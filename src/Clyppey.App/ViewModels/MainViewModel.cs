@@ -96,6 +96,8 @@ public sealed class MainViewModel : ObservableObject
     private double _bufferPercent;
     private double _micLevel;
     private double _micLevelTarget;
+    private double _desktopLevel;
+    private double _desktopLevelTarget;
 
     private static readonly SolidColorBrush IdleBrush = Frozen("#8A93A5");
     private static readonly SolidColorBrush ReadyBrush = Frozen("#2DD4BF");
@@ -308,6 +310,12 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _micLevel;
         private set => Set(ref _micLevel, value);
+    }
+
+    public double DesktopLevel
+    {
+        get => _desktopLevel;
+        private set => Set(ref _desktopLevel, value);
     }
 
     // ---------------------------------------------------------------- selection proxies
@@ -1295,6 +1303,11 @@ public sealed class MainViewModel : ObservableObject
         var micTarget = _micLevelTarget;
         // Fast attack, slow release, the way an audio meter behaves.
         MicLevel = micTarget > MicLevel ? micTarget : MicLevel + (micTarget - MicLevel) * 0.12;
+
+        var desktopTarget = _desktopLevelTarget;
+        DesktopLevel = desktopTarget > DesktopLevel
+            ? desktopTarget
+            : DesktopLevel + (desktopTarget - DesktopLevel) * 0.12;
     }
 
     private double _statsTargetPercent;
@@ -1340,6 +1353,9 @@ public sealed class MainViewModel : ObservableObject
                 stats.BufferedSeconds.ToString("0.0"), stats.BufferTargetSeconds.ToString("0"));
 
             _micLevelTarget = stats.MicrophoneActive ? Math.Clamp(stats.MicrophoneLevel * 1.6, 0, 1) : 0;
+
+            // The loopback peak is the same scale as the microphone's, so it gets the same boost.
+            _desktopLevelTarget = stats.DesktopAudioActive ? Math.Clamp(stats.DesktopAudioLevel * 1.6, 0, 1) : 0;
         }
 
         if (_engine is not null)

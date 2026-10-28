@@ -60,6 +60,9 @@ public sealed record ReplayStats
     /// <summary>Live microphone input level, 0..1 (for the level meter).</summary>
     public float MicrophoneLevel { get; init; }
 
+    /// <summary>Live desktop (loopback) level, 0..1 (for the level meter).</summary>
+    public float DesktopAudioLevel { get; init; }
+
     public double RecordingSeconds { get; init; }
 
     public bool MemoryCapped { get; init; }
@@ -448,6 +451,7 @@ public sealed class ReplayEngine : IDisposable
             DesktopAudioActive = _desktopAudio.IsRunning,
             MicrophoneActive = _microphone.IsRunning,
             MicrophoneLevel = _microphone.PeakLevel,
+            DesktopAudioLevel = _desktopAudio.PeakLevel,
             RecordingSeconds = State == EngineState.Recording ? (DateTime.Now - _recordStart).TotalSeconds : 0,
             MemoryCapped = capped
         };
