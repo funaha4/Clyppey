@@ -82,7 +82,8 @@ public partial class ClipEditorWindow : Window
         IReadOnlyList<TimeRange>? initialCuts = null,
         TimeRange? initialSelection = null,
         double? initialPin = null,
-        int initialHoverEdge = 0)
+        int initialHoverEdge = 0,
+        int initialArmedEdge = 0)
     {
         InitializeComponent();
 
@@ -93,6 +94,12 @@ public partial class ClipEditorWindow : Window
         _initialSelection = initialSelection;
         _initialPin = initialPin;
         _hoverEdge = initialHoverEdge;
+
+        if (initialArmedEdge != 0)
+        {
+            _edgeArmed = true;
+            _activeEdgeIsStart = initialArmedEdge < 0;
+        }
 
         ClipNameText.Text = clip.FileName;
         FileNameBox.Text = Path.GetFileNameWithoutExtension(clip.FileName) + "_cut.mp4";
@@ -137,6 +144,26 @@ public partial class ClipEditorWindow : Window
     /// is throttled and Media Foundation finishes it asynchronously, so following the player
     /// made the playhead step along at about 9 Hz while the cursor moved smoothly.
     /// </summary>
+    /// <summary>Which end the arrow keys adjust, or 0 when no end is armed.</summary>
+    private int ArmedEdge => _edgeArmed ? (_activeEdgeIsStart ? -1 : 1) : 0;
+
+    /// <summary>
+    /// The end being worked on: dragged, hovered, or armed for the arrow keys. This is what the
+    /// amber highlight follows, so it stays visible while nudging with the keyboard.
+    /// </summary>
+    private int ActiveEdge
+    {
+        get
+        {
+            if (_edgeDrag)
+            {
+                return _edgeIsStart ? -1 : 1;
+            }
+
+            return _hoverEdge != 0 ? _hoverEdge : ArmedEdge;
+        }
+    }
+
     private double DisplaySeconds =>
         _pinnedSeconds is { } pinned
             ? Math.Clamp(pinned, 0, _media?.Duration ?? pinned)
@@ -437,24 +464,26 @@ public partial class ClipEditorWindow : Window
         _focusFill.Width = pixels;
         Canvas.SetLeft(_focusFill, from);
 
-        // The edge under the pointer (or being dragged) turns amber and gets thicker, so it is
-        // obvious which end the arrow keys would move.
-        var hot = _edgeDrag ? (_edgeIsStart ? -1 : 1) : _hoverEdge;
+        // The end being worked on turns amber and thicker: dragged, hovered, or armed for the
+        // arrow keys. That way the state stays visible while nudging rather than only on click.
+        var hot = ActiveEdge;
 
         var leftHot = hot == -1;
-        _focusLeft.Width = leftHot ? 4 : 2;
+        var leftHover = !leftHot && _hoverEdge == -1;
+        _focusLeft.Width = leftHot ? 4 : leftHover ? 3 : 2;
         _focusLeft.Background = leftHot ? _warnBrush : _edgeBrush;
         _focusLeft.Visibility = Visibility.Visible;
         Canvas.SetLeft(_focusLeft, leftHot ? from - 1 : from);
 
         var rightHot = hot == 1;
-        _focusRight.Width = rightHot ? 4 : 2;
+        var rightHover = !rightHot && _hoverEdge == 1;
+        _focusRight.Width = rightHot ? 4 : rightHover ? 3 : 2;
         _focusRight.Background = rightHot ? _warnBrush : _edgeBrush;
 
-        if (rightHot)
+        if (rightHot || rightHover)
         {
             _focusRight.Visibility = Visibility.Visible;
-            Canvas.SetLeft(_focusRight, to - 3);
+            Canvas.SetLeft(_focusRight, rightHot ? to - 3 : to - 2);
         }
         else if (pixels < 6)
         {
@@ -471,11 +500,12 @@ public partial class ClipEditorWindow : Window
         var grabbable = _selection is not null;
         var canvasHeight = TimelineCanvas.ActualHeight;
 
-        ApplyHandle(_handleLeft, grabbable, leftHot, from, canvasHeight);
-        ApplyHandle(_handleRight, grabbable, rightHot, to, canvasHeight);
+        ApplyHandle(_handleLeft, grabbable, leftHot, leftHover, from, canvasHeight);
+        ApplyHandle(_handleRight, grabbable, rightHot, rightHover, to, canvasHeight);
     }
 
-    private void ApplyHandle(Border? handle, bool visible, bool hot, double x, double canvasHeight)
+    private void ApplyHandle(
+        Border? handle, bool visible, bool hot, bool hover, double x, double canvasHeight)
     {
         if (handle is null)
         {
@@ -488,8 +518,8 @@ public partial class ClipEditorWindow : Window
             return;
         }
 
-        var width = hot ? 12.0 : 8.0;
-        var height = hot ? 26.0 : 16.0;
+        var width = hot ? 12.0 : hover ? 10.0 : 8.0;
+        var height = hot ? 26.0 : hover ? 20.0 : 16.0;
 
         handle.Visibility = Visibility.Visible;
         handle.Width = width;
@@ -1285,8 +1315,10 @@ public partial class ClipEditorWindow : Window
             RemoveSelectionButton.IsEnabled = !_busy;
             KeepOnlyButton.IsEnabled = !_busy;
 
-            var hot = _edgeDrag ? (_edgeIsStart ? -1 : 1) : _hoverEdge;
-            SelectionText.Text = hot switch
+            // The "adjusting …" wording is only for pointing at an end; the amber highlight
+            // (which also covers the armed end) carries the state otherwise.
+            var pointed = _edgeDrag ? (_edgeIsStart ? -1 : 1) : _hoverEdge;
+            SelectionText.Text = pointed switch
             {
                 -1 => Loc.F("Trim.EdgeStart", MMss(selection.Start)),
                 1 => Loc.F("Trim.EdgeEnd", MMss(selection.End)),

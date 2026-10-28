@@ -93,6 +93,9 @@ public partial class App : Application
                     : null,
                 initialHoverEdge: int.TryParse(GetArgumentValue(e.Args, "--editor-hover-edge"), out var hoverEdge)
                     ? hoverEdge
+                    : 0,
+                initialArmedEdge: int.TryParse(GetArgumentValue(e.Args, "--editor-arm-edge"), out var armEdge)
+                    ? armEdge
                     : 0);
             editor.Show();
 
