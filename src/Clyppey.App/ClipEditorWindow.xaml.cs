@@ -43,6 +43,8 @@ public partial class ClipEditorWindow : Window
     private double? _markStart;
     private bool _dragging;
     private double _dragAnchor;
+    private const int PreviewSeekIntervalMs = 110;
+
     private DateTime _lastHoverSeekUtc = DateTime.MinValue;
     private double _lastHoverSeconds = -1;
     private bool _isPlaying;
@@ -446,6 +448,11 @@ public partial class ClipEditorWindow : Window
         _dragging = true;
         _selection = null;
         TimelineCanvas.CaptureMouse();
+
+        // Do not let a hover seek that just happened swallow the first frame of the drag.
+        _lastHoverSeekUtc = DateTime.MinValue;
+        ScrubPreviewAt(_dragAnchor);
+
         UpdateFocusGeometry();
         UpdateSelectionUi();
         UpdatePlayhead(_dragAnchor);
@@ -468,9 +475,10 @@ public partial class ClipEditorWindow : Window
             return;
         }
 
-        // Only the visuals follow the cursor while dragging; the player is seeked on release
-        // because scrubbing a 350 MB clip through Media Foundation is not free.
+        // Only the band is redrawn on every mouse event; the preview follows on the same
+        // throttle as hovering, because a Media Foundation seek per event would fall behind.
         _selection = TimeRange.Normalized(_dragAnchor, pointer);
+        ScrubPreviewAt(pointer);
         UpdateFocusGeometry();
         UpdateSelectionUi();
         UpdatePlayhead(pointer);
@@ -494,7 +502,7 @@ public partial class ClipEditorWindow : Window
         }
 
         var now = DateTime.UtcNow;
-        if ((now - _lastHoverSeekUtc).TotalMilliseconds < 110)
+        if ((now - _lastHoverSeekUtc).TotalMilliseconds < PreviewSeekIntervalMs)
         {
             return;
         }
