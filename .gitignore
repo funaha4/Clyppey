@@ -39,3 +39,6 @@ dist/
 
 # screenshots of the real desktop are never published
 docs/images/
+# 検証用の一時フォルダ（絶対にコミットしない）
+.tmpcut/
+.audiotest/
