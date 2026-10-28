@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Clyppey"
-        Width="1180" Height="780"
+        Width="1180" Height="820"
         WindowStyle="None"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
@@ -15,6 +15,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="52" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -65,7 +66,10 @@
                     <Image x:Name="FilmstripImage" Stretch="Fill" Opacity="0.42" Margin="1" />
                     <Canvas x:Name="TimelineCanvas" Background="Transparent" ClipToBounds="True"
                             Cursor="Hand" SizeChanged="TimelineCanvas_SizeChanged"
-                            MouseLeftButtonDown="Timeline_MouseLeftButtonDown" />
+                            MouseLeftButtonDown="Timeline_MouseLeftButtonDown"
+                            MouseMove="Timeline_MouseMove"
+                            MouseLeftButtonUp="Timeline_MouseLeftButtonUp"
+                            LostMouseCapture="Timeline_LostMouseCapture" />
                 </Grid>
             </Border>
 
@@ -104,15 +108,36 @@
                     <Button x:Name="MarkEndButton" Content="{DynamicResource Trim.MarkEnd}"
                             Style="{StaticResource BaseButton}" Padding="14,8" Margin="6,0,0,0"
                             Click="MarkEnd_Click" />
+                </StackPanel>
+            </Grid>
+
+            <!-- ============================== selection actions ============================== -->
+            <Grid Grid.Row="4" Margin="18,10,18,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock x:Name="SelectionText" Style="{StaticResource Caption}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="RemoveSelectionButton" Content="{DynamicResource Trim.RemoveSelection}"
+                            Style="{StaticResource BaseButton}" Padding="16,8" Click="RemoveSelection_Click" />
+                    <Button x:Name="KeepOnlyButton" Content="{DynamicResource Trim.KeepOnly}"
+                            Style="{StaticResource BaseButton}" Padding="16,8" Margin="6,0,0,0"
+                            Click="KeepOnly_Click" />
                     <Button Content="{DynamicResource Trim.Undo}" Style="{StaticResource GhostButton}"
                             Padding="10,8" Margin="6,0,0,0" Click="Undo_Click" />
+                    <Button Content="{DynamicResource Trim.Invert}" Style="{StaticResource GhostButton}"
+                            Padding="10,8" Click="Invert_Click" />
                     <Button Content="{DynamicResource Trim.Clear}" Style="{StaticResource GhostButton}"
                             Padding="10,8" Click="ClearCuts_Click" />
                 </StackPanel>
             </Grid>
 
             <!-- ============================== export ============================== -->
-            <Grid Grid.Row="4" Margin="18,12,18,16">
+            <Grid Grid.Row="5" Margin="18,12,18,16">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />

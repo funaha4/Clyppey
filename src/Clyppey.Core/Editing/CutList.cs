@@ -145,4 +145,54 @@ public sealed class CutList
 
         return total;
     }
+
+    /// <summary>
+    /// Deletes everything outside <paramref name="keep"/>. This is the "cut down to the good
+    /// part" gesture: select the play, throw away the rest of the clip.
+    /// </summary>
+    public void KeepOnly(TimeRange keep, double duration)
+    {
+        var start = Math.Clamp(Math.Min(keep.Start, keep.End), 0, duration);
+        var end = Math.Clamp(Math.Max(keep.Start, keep.End), 0, duration);
+        if (end - start < 0.05)
+        {
+            return;
+        }
+
+        lock (_removed)
+        {
+            _removed.Clear();
+        }
+
+        if (start > 0.01)
+        {
+            Add(new TimeRange(0, start));
+        }
+
+        if (duration - end > 0.01)
+        {
+            Add(new TimeRange(end, duration));
+        }
+    }
+
+    /// <summary>Swaps what is kept with what is removed.</summary>
+    public void Invert(double duration)
+    {
+        if (Count == 0)
+        {
+            // Nothing to invert: removing everything would only be a foot-gun.
+            return;
+        }
+
+        var keeps = Keeps(duration);
+        lock (_removed)
+        {
+            _removed.Clear();
+        }
+
+        foreach (var keep in keeps)
+        {
+            Add(keep);
+        }
+    }
 }

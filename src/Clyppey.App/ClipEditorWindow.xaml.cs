@@ -28,6 +28,7 @@ public partial class ClipEditorWindow : Window
     private readonly string _ffmpegPath;
     private readonly Action<string, double>? _onSaved;
     private readonly IReadOnlyList<TimeRange>? _initialCuts;
+    private readonly TimeRange? _initialSelection;
     private readonly CutList _cuts = new();
     private readonly DispatcherTimer _timer;
     private readonly TaskCompletionSource<bool> _loadedSignal = new();
@@ -35,8 +36,11 @@ public partial class ClipEditorWindow : Window
     private MediaInfo? _media;
     private IReadOnlyList<double> _keyframes = Array.Empty<double>();
     private Border? _playhead;
-    private Border? _pendingVisual;
+    private Border? _focusVisual;
+    private TimeRange? _selection;
     private double? _markStart;
+    private bool _dragging;
+    private double _dragAnchor;
     private bool _isPlaying;
     private bool _busy;
     private bool _mediaReady;
@@ -47,7 +51,8 @@ public partial class ClipEditorWindow : Window
         ClipEntry clip,
         string ffmpegPath,
         Action<string, double>? onSaved = null,
-        IReadOnlyList<TimeRange>? initialCuts = null)
+        IReadOnlyList<TimeRange>? initialCuts = null,
+        TimeRange? initialSelection = null)
     {
         InitializeComponent();
 
@@ -55,6 +60,7 @@ public partial class ClipEditorWindow : Window
         _ffmpegPath = ffmpegPath;
         _onSaved = onSaved;
         _initialCuts = initialCuts;
+        _initialSelection = initialSelection;
 
         ClipNameText.Text = clip.FileName;
         FileNameBox.Text = Path.GetFileNameWithoutExtension(clip.FileName) + "_cut.mp4";
@@ -62,6 +68,7 @@ public partial class ClipEditorWindow : Window
         ModeBox.Items.Add(Loc.T("Trim.ModeExact"));
         ModeBox.Items.Add(Loc.T("Trim.ModeFast"));
         ModeBox.SelectedIndex = 0;
+        UpdateSelectionUi();
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         _timer.Tick += (_, _) => OnTick();
@@ -133,6 +140,12 @@ public partial class ClipEditorWindow : Window
                 }
 
                 UpdateKeptText();
+            }
+
+            if (_initialSelection is { } initial)
+            {
+                _selection = initial;
+                UpdateSelectionUi();
             }
 
             RedrawTimeline();
@@ -214,7 +227,7 @@ public partial class ClipEditorWindow : Window
 
         TimelineCanvas.Children.Clear();
         _playhead = null;
-        _pendingVisual = null;
+        _focusVisual = null;
 
         var duration = _media.Duration;
 
@@ -261,19 +274,21 @@ public partial class ClipEditorWindow : Window
             TimelineCanvas.Children.Add(box);
         }
 
-        if (_markStart is not null)
+        // The band the user is pointing at: a dragged selection, or the range being marked.
+        // An outline plus a light tint, unlike the removed bands: the user still needs to see
+        // what is inside a selection, because it is what will be kept.
+        var focus = new Border
         {
-            var pending = new Border
-            {
-                Width = 2,
-                Height = height,
-                Background = new SolidColorBrush(Color.FromArgb(0x70, 0x2D, 0xD4, 0xBF))
-            };
-            Canvas.SetLeft(pending, _markStart.Value / duration * width);
-            TimelineCanvas.Children.Add(pending);
-            _pendingVisual = pending;
-            UpdatePendingVisual();
-        }
+            Width = 2,
+            Height = height,
+            Background = new SolidColorBrush(Color.FromArgb(0x38, 0x2D, 0xD4, 0xBF)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x5E, 0xEA, 0xD8)),
+            BorderThickness = new Thickness(2, 1, 2, 1),
+            Visibility = Visibility.Collapsed
+        };
+        TimelineCanvas.Children.Add(focus);
+        _focusVisual = focus;
+        UpdateFocusGeometry();
 
         var playhead = new Border
         {
@@ -286,9 +301,29 @@ public partial class ClipEditorWindow : Window
         _playhead = playhead;
     }
 
-    private void UpdatePendingVisual()
+    /// <summary>Whatever the user is currently pointing at: a dragged selection or an open mark.</summary>
+    private TimeRange? FocusRange
     {
-        if (_media is null || _pendingVisual is null || _markStart is null)
+        get
+        {
+            if (_selection is { } selection && selection.Duration > 0.01)
+            {
+                return selection;
+            }
+
+            if (_markStart is { } start)
+            {
+                var range = TimeRange.Normalized(start, CurrentSeconds);
+                return range.Duration > 0.01 ? range : null;
+            }
+
+            return null;
+        }
+    }
+
+    private void UpdateFocusGeometry()
+    {
+        if (_media is null || _focusVisual is null)
         {
             return;
         }
@@ -299,10 +334,15 @@ public partial class ClipEditorWindow : Window
             return;
         }
 
-        var start = Math.Min(_markStart.Value, CurrentSeconds);
-        var end = Math.Max(_markStart.Value, CurrentSeconds);
-        Canvas.SetLeft(_pendingVisual, start / _media.Duration * width);
-        _pendingVisual.Width = Math.Max(2, (end - start) / _media.Duration * width);
+        if (FocusRange is not { } range)
+        {
+            _focusVisual.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _focusVisual.Visibility = Visibility.Visible;
+        Canvas.SetLeft(_focusVisual, range.Start / _media.Duration * width);
+        _focusVisual.Width = Math.Max(2, range.Duration / _media.Duration * width);
     }
 
     private void UpdatePlayhead(double seconds)
@@ -323,21 +363,100 @@ public partial class ClipEditorWindow : Window
 
     private void TimelineCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => RedrawTimeline();
 
-    private void Timeline_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private double SecondsAt(Point point)
     {
         if (_media is null)
         {
-            return;
+            return 0;
         }
 
         var width = TimelineCanvas.ActualWidth;
         if (width <= 0)
         {
+            return 0;
+        }
+
+        return Math.Clamp(point.X / width, 0, 1) * _media.Duration;
+    }
+
+    private void Timeline_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_media is null || _busy)
+        {
             return;
         }
 
-        var fraction = Math.Clamp(e.GetPosition(TimelineCanvas).X / width, 0, 1);
-        SeekTo(fraction * _media.Duration);
+        SetPlaying(false);
+        _dragAnchor = SecondsAt(e.GetPosition(TimelineCanvas));
+        _dragging = true;
+        _selection = null;
+        TimelineCanvas.CaptureMouse();
+        UpdateFocusGeometry();
+        UpdateSelectionUi();
+        UpdatePlayhead(_dragAnchor);
+        TimeText.Text = $"{MMss(_dragAnchor)} / {MMss(_media.Duration)}";
+    }
+
+    private void Timeline_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_dragging || _media is null)
+        {
+            return;
+        }
+
+        // Only the visuals follow the cursor while dragging; the player is seeked on release
+        // because scrubbing a 350 MB clip through Media Foundation is not free.
+        var seconds = SecondsAt(e.GetPosition(TimelineCanvas));
+        _selection = TimeRange.Normalized(_dragAnchor, seconds);
+        UpdateFocusGeometry();
+        UpdateSelectionUi();
+        UpdatePlayhead(seconds);
+        TimeText.Text = $"{MMss(seconds)} / {MMss(_media.Duration)}";
+    }
+
+    private void Timeline_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_dragging)
+        {
+            return;
+        }
+
+        _dragging = false;
+        if (TimelineCanvas.IsMouseCaptured)
+        {
+            TimelineCanvas.ReleaseMouseCapture();
+        }
+
+        var seconds = SecondsAt(e.GetPosition(TimelineCanvas));
+
+        if (_selection is { } selection && selection.Duration >= 0.08)
+        {
+            // Park the playhead on the out point so the cut can be checked right away.
+            SeekTo(selection.End);
+        }
+        else
+        {
+            // A plain click is just a seek.
+            _selection = null;
+            SeekTo(seconds);
+        }
+
+        RedrawTimeline();
+        UpdateSelectionUi();
+    }
+
+    private void Timeline_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        if (!_dragging)
+        {
+            return;
+        }
+
+        // Alt+Tab or another window stealing the capture must not leave the tool stuck
+        // half-way through a drag.
+        _dragging = false;
+        RedrawTimeline();
+        UpdateSelectionUi();
     }
 
     private void OnTick()
@@ -349,7 +468,7 @@ public partial class ClipEditorWindow : Window
 
         var seconds = CurrentSeconds;
         UpdatePlayhead(seconds);
-        UpdatePendingVisual();
+        UpdateFocusGeometry();
         TimeText.Text = $"{MMss(seconds)} / {MMss(_media.Duration)}";
 
         if (_isPlaying && Player.Position.TotalSeconds >= _media.Duration - 0.05)
@@ -515,6 +634,7 @@ public partial class ClipEditorWindow : Window
 
         _cuts.Clear();
         _markStart = null;
+        _selection = null;
         StatusText.Text = string.Empty;
         UpdateKeptText();
         RedrawTimeline();
@@ -532,6 +652,78 @@ public partial class ClipEditorWindow : Window
         ExportButton.IsEnabled = !_busy && kept > 0.5;
     }
 
+    // ---------------------------------------------------------------- selection
+
+    private void RemoveSelection_Click(object sender, RoutedEventArgs e) => RemoveSelection();
+
+    private void RemoveSelection()
+    {
+        if (_busy || _selection is not { } selection || _media is null)
+        {
+            return;
+        }
+
+        if (selection.Duration >= 0.1)
+        {
+            _cuts.Add(selection);
+            StatusText.Text = Loc.F("Trim.CutAdded", selection.Duration.ToString("0.0"), _cuts.Count.ToString());
+        }
+
+        _selection = null;
+        UpdateKeptText();
+        RedrawTimeline();
+        UpdateSelectionUi();
+    }
+
+    /// <summary>Throws away everything except the selection: the "keep only the play" gesture.</summary>
+    private void KeepOnly_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _selection is not { } selection || _media is null)
+        {
+            return;
+        }
+
+        _cuts.KeepOnly(selection, _media.Duration);
+        _selection = null;
+        StatusText.Text = Loc.F("Trim.KeptOnly", selection.Duration.ToString("0.0"));
+        UpdateKeptText();
+        RedrawTimeline();
+        UpdateSelectionUi();
+    }
+
+    private void Invert_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _media is null || _cuts.Count == 0)
+        {
+            return;
+        }
+
+        _cuts.Invert(_media.Duration);
+        _selection = null;
+        UpdateKeptText();
+        RedrawTimeline();
+        UpdateSelectionUi();
+    }
+
+    private void UpdateSelectionUi()
+    {
+        if (_selection is { } selection && selection.Duration > 0.02)
+        {
+            RemoveSelectionButton.IsEnabled = !_busy;
+            KeepOnlyButton.IsEnabled = !_busy;
+            SelectionText.Text = Loc.F(
+                "Trim.SelectionValue",
+                MMss(selection.Start),
+                MMss(selection.End),
+                selection.Duration.ToString("0.0"));
+            return;
+        }
+
+        RemoveSelectionButton.IsEnabled = false;
+        KeepOnlyButton.IsEnabled = false;
+        SelectionText.Text = Loc.T("Trim.SelectHint");
+    }
+
     // ---------------------------------------------------------------- export
 
     private void Mode_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -542,9 +734,14 @@ public partial class ClipEditorWindow : Window
     private async void Export_Click(object sender, RoutedEventArgs e) => await ExportAsync().ConfigureAwait(true);
 
     /// <summary>Dev hook: runs the export without a click so the UI path can be verified.</summary>
-    internal async Task<string> ExportForTestAsync()
+    internal async Task<string> ExportForTestAsync(bool keepOnly = false)
     {
         await _loadedSignal.Task.ConfigureAwait(true);
+        if (keepOnly)
+        {
+            KeepOnly_Click(this, new RoutedEventArgs());
+        }
+
         await ExportAsync().ConfigureAwait(true);
         return StatusText.Text;
     }
@@ -634,6 +831,7 @@ public partial class ClipEditorWindow : Window
         MarkEndButton.IsEnabled = !busy;
         ModeBox.IsEnabled = !busy;
         FileNameBox.IsEnabled = !busy;
+        UpdateSelectionUi();
 
         if (_media is not null)
         {
@@ -697,6 +895,10 @@ public partial class ClipEditorWindow : Window
                 break;
             case Key.Right:
                 StepFrames(1);
+                e.Handled = true;
+                break;
+            case Key.Delete:
+                RemoveSelection();
                 e.Handled = true;
                 break;
         }

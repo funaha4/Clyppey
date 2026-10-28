@@ -164,7 +164,7 @@
     <sys:String x:Key="Trim.PlayHint">再生 / 一時停止（スペース）</sys:String>
     <sys:String x:Key="Trim.PrevFrame">1 フレーム戻る（←）</sys:String>
     <sys:String x:Key="Trim.NextFrame">1 フレーム進む（→）</sys:String>
-    <sys:String x:Key="Trim.Hint">スペース: 再生 · I / O: 区間を削除 · ←/→: 1 フレーム</sys:String>
+    <sys:String x:Key="Trim.Hint">スペース: 再生 · ドラッグ: 範囲を選択 · I / O: 削除区間 · ←/→: 1 フレーム</sys:String>
     <sys:String x:Key="Trim.MarkStart">ここから削除（I）</sys:String>
     <sys:String x:Key="Trim.MarkEnd">ここまで（O）</sys:String>
     <sys:String x:Key="Trim.Undo">1つ戻す</sys:String>
@@ -181,5 +181,11 @@
     <sys:String x:Key="Trim.DoneWarn">保存しましたが注意があります: {0}</sys:String>
     <sys:String x:Key="Trim.Failed">失敗: {0}</sys:String>
     <sys:String x:Key="Trim.Empty">残す区間がありません。先に削除する区間を決めてください。</sys:String>
+    <sys:String x:Key="Trim.SelectHint">タイムラインを左右にドラッグすると範囲を選べます（Delete で削除）。</sys:String>
+    <sys:String x:Key="Trim.SelectionValue">選択 {0} – {1}（{2} 秒）</sys:String>
+    <sys:String x:Key="Trim.RemoveSelection">この範囲を消す</sys:String>
+    <sys:String x:Key="Trim.KeepOnly">ここ以外を消す</sys:String>
+    <sys:String x:Key="Trim.Invert">反転</sys:String>
+    <sys:String x:Key="Trim.KeptOnly">{0} 秒だけ残します（外側を削除）</sys:String>
 
 </ResourceDictionary>

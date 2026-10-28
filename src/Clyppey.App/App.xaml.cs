@@ -82,7 +82,8 @@ public partial class App : Application
             var editor = new ClipEditorWindow(
                 clipEntry,
                 Clyppey.Core.Ffmpeg.FfmpegLocator.Find() ?? string.Empty,
-                initialCuts: ParseRanges(GetArgumentValue(e.Args, "--editor-cuts")));
+                initialCuts: ParseRanges(GetArgumentValue(e.Args, "--editor-cuts")),
+                initialSelection: ParseRanges(GetArgumentValue(e.Args, "--editor-select"))?.FirstOrDefault());
             editor.Show();
 
             if (e.Args.Any(a => string.Equals(a, "--editor-export", StringComparison.OrdinalIgnoreCase)))
@@ -455,7 +456,10 @@ public partial class App : Application
     {
         try
         {
-            var status = await editor.ExportForTestAsync().ConfigureAwait(true);
+            var status = await editor.ExportForTestAsync(
+                    keepOnly: Environment.GetCommandLineArgs()
+                        .Any(a => string.Equals(a, "--editor-keep-only", StringComparison.OrdinalIgnoreCase)))
+                .ConfigureAwait(true);
             Log.Info($"editor export: {status}");
             Console.Error.WriteLine($"editor export: {status}");
         }

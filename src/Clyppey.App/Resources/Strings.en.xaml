@@ -164,7 +164,7 @@
     <sys:String x:Key="Trim.PlayHint">Play / pause (Space)</sys:String>
     <sys:String x:Key="Trim.PrevFrame">Back one frame (←)</sys:String>
     <sys:String x:Key="Trim.NextFrame">Forward one frame (→)</sys:String>
-    <sys:String x:Key="Trim.Hint">Space: play · I / O: remove a range · ←/→: one frame</sys:String>
+    <sys:String x:Key="Trim.Hint">Space: play · drag: select a range · I / O: remove a range · ←/→: one frame</sys:String>
     <sys:String x:Key="Trim.MarkStart">Remove from here (I)</sys:String>
     <sys:String x:Key="Trim.MarkEnd">To here (O)</sys:String>
     <sys:String x:Key="Trim.Undo">Undo last</sys:String>
@@ -181,5 +181,11 @@
     <sys:String x:Key="Trim.DoneWarn">Saved with a warning: {0}</sys:String>
     <sys:String x:Key="Trim.Failed">Failed: {0}</sys:String>
     <sys:String x:Key="Trim.Empty">Nothing left to keep. Mark the ranges to remove first.</sys:String>
+    <sys:String x:Key="Trim.SelectHint">Drag left or right on the timeline to select a range (Delete removes it).</sys:String>
+    <sys:String x:Key="Trim.SelectionValue">Selection {0} – {1} ({2} s)</sys:String>
+    <sys:String x:Key="Trim.RemoveSelection">Remove this range</sys:String>
+    <sys:String x:Key="Trim.KeepOnly">Remove everything else</sys:String>
+    <sys:String x:Key="Trim.Invert">Invert</sys:String>
+    <sys:String x:Key="Trim.KeptOnly">Keeping only {0} s (the rest is removed)</sys:String>
 
 </ResourceDictionary>
