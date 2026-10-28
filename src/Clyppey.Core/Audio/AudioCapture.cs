@@ -98,6 +98,27 @@ public sealed class AudioCapture : IDisposable
         }
     }
 
+    /// <summary>
+    /// How far the buffered audio trails the wall clock, in seconds. Near zero when samples are
+    /// tied to their wall-clock position; a growing value means the source stopped delivering.
+    /// </summary>
+    public double LagSeconds
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (_startClock <= 0 || _format is null)
+                {
+                    return 0;
+                }
+
+                var head = _startClock + (_nextSampleIndex / (double)_format.SampleRate);
+                return Math.Max(0, Clock.Now - head);
+            }
+        }
+    }
+
     public static IReadOnlyList<AudioDeviceInfo> GetDevices(AudioKind kind)
     {
         var list = new List<AudioDeviceInfo>();
@@ -219,6 +240,36 @@ public sealed class AudioCapture : IDisposable
             var data = _sourceIsFloat
                 ? ConvertToPcm16(e.Buffer, samples)
                 : CopySamples(e.Buffer, samples * blockAlign);
+
+            // Keep every sample tied to its wall-clock position.
+            //
+            // WASAPI loopback stops delivering buffers while the endpoint is silent, and a
+            // capture device can hiccup too. Without this padding every quiet stretch slid the
+            // rest of the track earlier, so after a while the audio in a saved clip came from a
+            // completely different moment than the picture, and the tail of the clip was silent.
+            var now = Clock.Now;
+            var expectedWall = _startClock + (_nextSampleIndex / (double)_format.SampleRate);
+            var gap = (now - chunkSeconds) - expectedWall;
+            if (gap > 0.25)
+            {
+                var gapSamples = (long)(Math.Min(gap, _retainSeconds) * _format.SampleRate);
+                var blockAlignOut = Math.Max(1, _format.BlockAlign);
+                if (gapSamples > 0)
+                {
+                    // Cap the allocation: 32 MB is ~90 s of 16-bit stereo, and the ring trims
+                    // anything older than the retained window anyway.
+                    var bytes = (int)Math.Min(gapSamples * blockAlignOut, 32L * 1024 * 1024);
+                    var silenceSamples = Math.Max(1, bytes / blockAlignOut);
+
+                    _chunks.AddLast(new AudioChunk
+                    {
+                        Data = new byte[silenceSamples * blockAlignOut],
+                        StartSample = _nextSampleIndex,
+                        SampleCount = silenceSamples
+                    });
+                    _nextSampleIndex += silenceSamples;
+                }
+            }
 
             // Level meter: track the loudest sample, then let it fall away smoothly.
             var peak = ComputePeak(data, _format);

@@ -260,6 +260,18 @@ public sealed class ReplayEngine : IDisposable
                      $"captureStart={_captureStartWall:F3} audioAnchor={_desktopAudio.StartClock:F3} " +
                      $"arrivalMinusStart0={f0.ArrivalSeconds - f0.Start:F3} deltaVsCapture={(f0.ArrivalSeconds - f0.Start) - _captureStartWall:F3}");
 
+            // A source that trails the wall clock means it stopped delivering; the clip would then
+            // carry a silent or misplaced track, so say it out loud instead of shipping it quietly.
+            if (_desktopAudio.IsRunning && _desktopAudio.LagSeconds > 1.5)
+            {
+                Log.Warn($"デスクトップ音声が {_desktopAudio.LagSeconds:F1} 秒遅れています（無音区間の穴埋め漏れ）");
+            }
+
+            if (_microphone.IsRunning && _microphone.LagSeconds > 1.5)
+            {
+                Log.Warn($"マイク音声が {_microphone.LagSeconds:F1} 秒遅れています");
+            }
+
             var outputPath = BuildClipPath(isRecording: false);
 
             // The audio window must line up with the picture's content time. Deriving it from
