@@ -65,6 +65,8 @@ public partial class ClipEditorWindow : Window
 
     private DateTime _lastHoverSeekUtc = DateTime.MinValue;
     private double _lastHoverSeconds = -1;
+    private double? _lastSkipTarget;
+    private DateTime _lastSkipUtc = DateTime.MinValue;
     private bool _isPlaying;
     private bool _busy;
     private bool _mediaReady;
@@ -845,6 +847,70 @@ public partial class ClipEditorWindow : Window
             : $"{MMss(seconds)} / {MMss(_media.Duration)}";
     }
 
+    /// <summary>
+    /// Moves the player past a range marked for removal, so playback previews the edit.
+    /// Returns true when the position was changed.
+    /// </summary>
+    private bool SkipRemovedDuringPlayback()
+    {
+        if (_media is null)
+        {
+            return false;
+        }
+
+        var position = Player.Position.TotalSeconds;
+        var target = position;
+
+        // One pass is enough for merged ranges, but a jump can land inside the next one.
+        for (var guard = 0; guard < 8; guard++)
+        {
+            var moved = false;
+            foreach (var range in _cuts.Removed)
+            {
+                if (target >= range.Start - 0.001 && target < range.End - 0.02)
+                {
+                    target = range.End + 0.001;
+                    moved = true;
+                    break;
+                }
+            }
+
+            if (!moved)
+            {
+                break;
+            }
+        }
+
+        if (Math.Abs(target - position) < 0.001)
+        {
+            return false;
+        }
+
+        // Media Foundation applies a seek asynchronously, so the same jump would otherwise be
+        // issued again on the next tick while the position still reads the old value.
+        var now = DateTime.UtcNow;
+        if (_lastSkipTarget is { } last &&
+            Math.Abs(last - target) < 0.001 &&
+            (now - _lastSkipUtc) < TimeSpan.FromMilliseconds(400))
+        {
+            return false;
+        }
+
+        _lastSkipTarget = target;
+        _lastSkipUtc = now;
+
+        try
+        {
+            Player.Position = TimeSpan.FromSeconds(Math.Clamp(target, 0, _media.Duration));
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     private void OnTick()
     {
         if (_media is null)
@@ -862,6 +928,14 @@ public partial class ClipEditorWindow : Window
         UpdatePlayhead(seconds);
         UpdateFocusGeometry();
         UpdateTimeText(seconds);
+
+        // Playing shows the edited result: ranges marked for removal are jumped over.
+        if (_isPlaying && SkipRemovedDuringPlayback())
+        {
+            seconds = CurrentSeconds;
+            UpdatePlayhead(seconds);
+            UpdateTimeText(seconds);
+        }
 
         if (_isPlaying && Player.Position.TotalSeconds >= _media.Duration - 0.05)
         {

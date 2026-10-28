@@ -85,19 +85,19 @@
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="RestartButton" Style="{StaticResource GhostButton}" Height="38" Padding="10,0"
-                            Click="Restart_Click" ToolTip="{DynamicResource Trim.PlayFromStart}">
+                            Click="Restart_Click">
                         <TextBlock Text="&#xE100;" FontFamily="Segoe MDL2 Assets" FontSize="12" />
                     </Button>
                     <Button x:Name="PlayButton" Style="{StaticResource BaseButton}" Width="48" Padding="0"
-                            Height="38" Margin="6,0,0,0" Click="Play_Click" ToolTip="{DynamicResource Trim.PlayHint}">
+                            Height="38" Margin="6,0,0,0" Click="Play_Click">
                         <TextBlock x:Name="PlayGlyph" Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="13" />
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Height="38" Padding="12,0" Margin="6,0,0,0"
-                            Click="FrameBack_Click" ToolTip="{DynamicResource Trim.PrevFrame}">
+                            Click="FrameBack_Click">
                         <TextBlock Text="&#xE76B;" FontFamily="Segoe MDL2 Assets" FontSize="12" />
                     </Button>
                     <Button Style="{StaticResource GhostButton}" Height="38" Padding="12,0"
-                            Click="FrameForward_Click" ToolTip="{DynamicResource Trim.NextFrame}">
+                            Click="FrameForward_Click">
                         <TextBlock Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" FontSize="12" />
                     </Button>
                     <TextBlock x:Name="TimeText" Style="{StaticResource Mono}" FontSize="13"
