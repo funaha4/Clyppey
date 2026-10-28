@@ -43,6 +43,8 @@ public partial class ClipEditorWindow : Window
     private double? _markStart;
     private bool _dragging;
     private double _dragAnchor;
+    private bool _pointerOverTimeline;
+    private double _pointerSeconds;
     private const int PreviewSeekIntervalMs = 110;
 
     private DateTime _lastHoverSeekUtc = DateTime.MinValue;
@@ -100,6 +102,16 @@ public partial class ClipEditorWindow : Window
         _mediaReady && _media is not null
             ? Math.Clamp(Player.Position.TotalSeconds, 0, _media.Duration)
             : 0;
+
+    /// <summary>
+    /// Where the playhead should be drawn, and where a mark lands.
+    ///
+    /// While the pointer is on the timeline the answer is the pointer, not the player: seeking
+    /// is throttled and Media Foundation finishes it asynchronously, so following the player
+    /// made the playhead step along at about 9 Hz while the cursor moved smoothly.
+    /// </summary>
+    private double DisplaySeconds =>
+        _pointerOverTimeline && !_dragging && !_isPlaying ? _pointerSeconds : CurrentSeconds;
 
     // ---------------------------------------------------------------- loading
 
@@ -339,7 +351,7 @@ public partial class ClipEditorWindow : Window
 
             if (_markStart is { } start)
             {
-                var range = TimeRange.Normalized(start, CurrentSeconds);
+                var range = TimeRange.Normalized(start, DisplaySeconds);
                 return range.Duration > 0.01 ? range : null;
             }
 
@@ -467,11 +479,20 @@ public partial class ClipEditorWindow : Window
         }
 
         var pointer = SecondsAt(e.GetPosition(TimelineCanvas));
+        _pointerOverTimeline = true;
+        _pointerSeconds = pointer;
 
         if (!_dragging)
         {
-            // Show the frame under the cursor so a range can be picked by eye.
-            ScrubPreviewAt(pointer);
+            // The line follows the cursor at mouse rate; the picture catches up on a throttle.
+            // While playback runs the playhead belongs to the player, not to the mouse.
+            if (!_isPlaying)
+            {
+                UpdatePlayhead(pointer);
+                TimeText.Text = $"{MMss(pointer)} / {MMss(_media.Duration)}";
+                ScrubPreviewAt(pointer);
+            }
+
             return;
         }
 
@@ -565,6 +586,17 @@ public partial class ClipEditorWindow : Window
         UpdateSelectionUi();
     }
 
+    private void Timeline_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (_dragging)
+        {
+            return;
+        }
+
+        _pointerOverTimeline = false;
+        OnTick();
+    }
+
     private void OnTick()
     {
         if (_media is null)
@@ -572,7 +604,13 @@ public partial class ClipEditorWindow : Window
             return;
         }
 
-        var seconds = CurrentSeconds;
+        if (_dragging)
+        {
+            // MouseMove owns the readouts during a drag; the player position lags behind it.
+            return;
+        }
+
+        var seconds = DisplaySeconds;
         UpdatePlayhead(seconds);
         UpdateFocusGeometry();
         TimeText.Text = $"{MMss(seconds)} / {MMss(_media.Duration)}";
@@ -654,12 +692,16 @@ public partial class ClipEditorWindow : Window
             return;
         }
 
-        SeekTo(CurrentSeconds + (delta * _media.FrameSeconds));
+        SeekTo(DisplaySeconds + (delta * _media.FrameSeconds));
     }
 
     private void SeekTo(double seconds)
     {
         SetPlaying(false);
+
+        // From here on the player is the truth again, so the playhead stops tracking the cursor.
+        _pointerOverTimeline = false;
+
         try
         {
             Player.Position = TimeSpan.FromSeconds(Math.Clamp(seconds, 0, _media?.Duration ?? 0));
@@ -685,7 +727,7 @@ public partial class ClipEditorWindow : Window
             return;
         }
 
-        _markStart = CurrentSeconds;
+        _markStart = DisplaySeconds;
         StatusText.Text = Loc.F("Trim.Marking", MMss(_markStart.Value));
         RedrawTimeline();
     }
@@ -703,8 +745,8 @@ public partial class ClipEditorWindow : Window
             return;
         }
 
-        var start = Math.Min(_markStart.Value, CurrentSeconds);
-        var end = Math.Max(_markStart.Value, CurrentSeconds);
+        var start = Math.Min(_markStart.Value, DisplaySeconds);
+        var end = Math.Max(_markStart.Value, DisplaySeconds);
         _markStart = null;
 
         if (end - start >= 0.1)

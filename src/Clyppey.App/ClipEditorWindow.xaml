@@ -69,6 +69,7 @@
                             MouseLeftButtonDown="Timeline_MouseLeftButtonDown"
                             MouseMove="Timeline_MouseMove"
                             MouseLeftButtonUp="Timeline_MouseLeftButtonUp"
+                            MouseLeave="Timeline_MouseLeave"
                             LostMouseCapture="Timeline_LostMouseCapture" />
                 </Grid>
             </Border>
