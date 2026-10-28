@@ -53,6 +53,7 @@ public partial class ClipEditorWindow : Window
     private double _dragAnchor;
     private TimeRange? _selectionBeforeDrag;
     private bool _pointerOverTimeline;
+    private bool _playerAuthoritative;
     private double _pointerSeconds;
     private double? _pinnedSeconds;
     private Brush _accentBrush = Brushes.Aquamarine;
@@ -132,7 +133,9 @@ public partial class ClipEditorWindow : Window
     private double DisplaySeconds =>
         _pinnedSeconds is { } pinned
             ? Math.Clamp(pinned, 0, _media?.Duration ?? pinned)
-            : _pointerOverTimeline && !_dragging && !_isPlaying ? _pointerSeconds : CurrentSeconds;
+            : !_playerAuthoritative && _pointerOverTimeline && !_dragging && !_isPlaying
+                ? _pointerSeconds
+                : CurrentSeconds;
 
     // ---------------------------------------------------------------- loading
 
@@ -501,7 +504,11 @@ public partial class ClipEditorWindow : Window
 
         // While dragging, the moving edge of the selection already marks the cursor. Leaving
         // the playhead at the previous position made the old edge look like a leftover.
-        if (_dragging)
+        // Hidden while dragging (the moving band edge is the cursor indicator) and whenever the
+        // pointer is away from the timeline: a line parked at the last position reads as a
+        // leftover. Playback and an explicit pin still keep it on screen.
+        var visible = !_dragging && (_pointerOverTimeline || _isPlaying || _pinnedSeconds is not null);
+        if (!visible)
         {
             _playhead.Visibility = Visibility.Collapsed;
             return;
@@ -595,6 +602,9 @@ public partial class ClipEditorWindow : Window
         {
             return;
         }
+
+        // The mouse is pointing again, so the cursor wins over the last seek.
+        _playerAuthoritative = false;
 
         // A pinned playhead ignores the mouse entirely until it is released.
         if (_pinnedSeconds is not null)
@@ -754,6 +764,7 @@ public partial class ClipEditorWindow : Window
         }
 
         _pointerOverTimeline = false;
+        _playerAuthoritative = false;
         OnTick();
     }
 
@@ -988,7 +999,7 @@ public partial class ClipEditorWindow : Window
         SetPlaying(false);
 
         // From here on the player is the truth again, so the playhead stops tracking the cursor.
-        _pointerOverTimeline = false;
+        _playerAuthoritative = true;
         _pinnedSeconds = null;
 
         try

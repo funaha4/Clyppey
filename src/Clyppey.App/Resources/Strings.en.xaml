@@ -181,7 +181,7 @@
     <sys:String x:Key="Trim.DoneWarn">Saved with a warning: {0}</sys:String>
     <sys:String x:Key="Trim.Failed">Failed: {0}</sys:String>
     <sys:String x:Key="Trim.Empty">Nothing left to keep. Mark the ranges to remove first.</sys:String>
-    <sys:String x:Key="Trim.SelectHint">Drag left or right on the timeline to select a range (Delete removes it).</sys:String>
+    <sys:String x:Key="Trim.SelectHint">Drag on the timeline to select a range. Drag an edge, or nudge it with ←/→.</sys:String>
     <sys:String x:Key="Trim.SelectionValue">Selection {0} – {1} ({2} s)</sys:String>
     <sys:String x:Key="Trim.RemoveSelection">Remove this range</sys:String>
     <sys:String x:Key="Trim.KeepOnly">Remove everything else</sys:String>
@@ -189,6 +189,5 @@
     <sys:String x:Key="Trim.KeptOnly">Keeping only {0} s (the rest is removed)</sys:String>
     <sys:String x:Key="Trim.PinnedTime">Pinned {0} / {1}</sys:String>
     <sys:String x:Key="Trim.PlayFromStart">Play from the start</sys:String>
-    <sys:String x:Key="Trim.EdgeHint">Drag an edge, or nudge it with ←/→ (Shift = 10 frames)</sys:String>
 
 </ResourceDictionary>

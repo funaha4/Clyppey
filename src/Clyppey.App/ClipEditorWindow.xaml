@@ -66,7 +66,6 @@
                     <Image x:Name="FilmstripImage" Stretch="Fill" Opacity="0.42" Margin="1" />
                     <Canvas x:Name="TimelineCanvas" Background="Transparent" ClipToBounds="True"
                             Cursor="Hand" SizeChanged="TimelineCanvas_SizeChanged"
-                            ToolTip="{DynamicResource Trim.EdgeHint}"
                             MouseLeftButtonDown="Timeline_MouseLeftButtonDown"
                             MouseRightButtonDown="Timeline_MouseRightButtonDown"
                             MouseMove="Timeline_MouseMove"
