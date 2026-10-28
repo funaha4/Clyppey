@@ -265,6 +265,14 @@ public sealed class ReplayEngine : IDisposable
 
             // A source that trails the wall clock means it stopped delivering; the clip would then
             // carry a silent or misplaced track, so say it out loud instead of shipping it quietly.
+            if (_desktopAudio.IsRunning)
+            {
+                Log.Info($"[audio] lag={_desktopAudio.LagSeconds:F3}s " +
+                         $"padded={_desktopAudio.PaddedSeconds:F2}s worst={_desktopAudio.MaxLagSeconds:F2}s " +
+                         $"mic={( _microphone.IsRunning ? _microphone.LagSeconds : -1):F3}s " +
+                         $"window={snapshot.WallStart:F3}..{snapshot.WallStart + snapshot.Duration:F3}");
+            }
+
             if (_desktopAudio.IsRunning && _desktopAudio.LagSeconds > 1.5)
             {
                 Log.Warn($"デスクトップ音声が {_desktopAudio.LagSeconds:F1} 秒遅れています（無音区間の穴埋め漏れ）");

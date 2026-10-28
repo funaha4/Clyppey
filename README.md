@@ -385,8 +385,29 @@ src\Clyppey.App\bin\Debug\net8.0-windows\Clyppey.exe --screenshot editor.png `
 
 ## 音声の同期について
 
-録画経路の音声オフセットは実測して補正しています（白色フラッシュとビープを同時に出して測る方式。
-詳細は [AGENTS.md](AGENTS.md) §12）。環境によって数十 ms 残る場合は、
+音声は**取得した時刻ではなく、実際に鳴った時刻**に合わせています。
+全画面の白フラッシュと 1 kHz ビープを同時に出し、保存したクリップの映像と音声の立ち上がりの
+差を測る方式で検証しています（詳細は [AGENTS.md](AGENTS.md) §12 / v3.8）。
+
+- デスクトップ音声のループバックは **20 ms バッファ + イベント駆動**で取得します。
+  NAudio 既定の 100 ms バッファ + ポーリングだと音声が「バッファが埋まるまで」届かず、
+  クリップ全体が**一定量ずれる**（実測 -190 ms）ためです
+- 無音で取りこぼしたサンプルは**その場で無音を埋めて**実時間に戻します。
+  ずれが溜まることはなく、上限は 20 ms です
+- 実測（フラッシュ + ビープ）: 修正前 **-198 ms** → 修正後 **-20 ms**
+  （測定自体に -20 ms 程度の系統誤差があるので、実質 0 ± 20 ms）
+
+自分の環境でも確認できます。
+
+```powershell
+# 1. 白フラッシュ + ビープを出して、ホットキーでクリップを保存
+powershell -ExecutionPolicy Bypass -File scripts\test-audio-sync.ps1 -Seconds 20 -PressHotkey
+
+# 2. 保存されたクリップの音ズレを測る（映像と音声の差をミリ秒で表示）
+powershell -ExecutionPolicy Bypass -File scripts\measure-audio-sync.ps1 -Clip "...\Videos\<clip>.mp4"
+```
+
+それでも数十 ms 残る場合（スピーカー側の遅延など）は、
 設定 → 詳細設定 → 「音声のずれ補正」で ±500 ms 調整できます。
 
 ## 既知の制限

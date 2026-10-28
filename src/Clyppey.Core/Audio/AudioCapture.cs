@@ -31,6 +31,16 @@ public enum AudioKind
 /// </summary>
 public sealed class AudioCapture : IDisposable
 {
+    /// <summary>
+    /// How far the sample stream may trail the wall clock before it is corrected. Callback timing
+    /// jitters by a millisecond or two, so this has to be larger than that; it is also the most
+    /// the timeline can ever be off, because every correction puts the error back to zero.
+    /// </summary>
+    private const double AudioJitterBudgetSeconds = 0.02;
+
+    /// <summary>A single correction never inserts more than this much silence.</summary>
+    private const double MaxPadSeconds = 60;
+
     private readonly object _gate = new();
     private readonly LinkedList<AudioChunk> _chunks = new();
     private readonly AudioKind _kind;
@@ -44,6 +54,8 @@ public sealed class AudioCapture : IDisposable
     private double _startClock;
     private long _nextSampleIndex;
     private double _retainSeconds = 75;
+    private double _paddedSeconds;
+    private double _maxLag;
     private float _peak;
     private float _peakDecay = 0.85f;
 
@@ -99,8 +111,9 @@ public sealed class AudioCapture : IDisposable
     }
 
     /// <summary>
-    /// How far the buffered audio trails the wall clock, in seconds. Near zero when samples are
-    /// tied to their wall-clock position; a growing value means the source stopped delivering.
+    /// How far the buffered audio currently trails the wall clock, in seconds. It is corrected
+    /// back to zero whenever it passes the jitter budget, so a value that keeps growing means the
+    /// source stopped delivering altogether.
     /// </summary>
     public double LagSeconds
     {
@@ -115,6 +128,30 @@ public sealed class AudioCapture : IDisposable
 
                 var head = _startClock + (_nextSampleIndex / (double)_format.SampleRate);
                 return Math.Max(0, Clock.Now - head);
+            }
+        }
+    }
+
+    /// <summary>Total silence inserted so far to keep the track on the wall clock.</summary>
+    public double PaddedSeconds
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _paddedSeconds;
+            }
+        }
+    }
+
+    /// <summary>Largest correction ever made; the size of the worst silence stretch seen.</summary>
+    public double MaxLagSeconds
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _maxLag;
             }
         }
     }
@@ -183,29 +220,48 @@ public sealed class AudioCapture : IDisposable
             _device = device;
             _retainSeconds = Math.Max(30, retainSeconds + 15);
 
-            _capture = _kind == AudioKind.Desktop
-                ? new WasapiLoopbackCapture(device)
-                : new WasapiCapture(device);
-
-            // Capture devices hand out 32-bit float; keeping that in the ring costs twice the RAM
-            // of 16-bit PCM with no audible benefit, so it is converted on the way in.
-            _sourceFormat = _capture.WaveFormat;
-            _sourceIsFloat = _sourceFormat.Encoding == WaveFormatEncoding.IeeeFloat &&
-                             _sourceFormat.BitsPerSample == 32;
-            _sourceBlockAlign = Math.Max(1, _sourceFormat.BlockAlign);
-            _format = _sourceIsFloat
-                ? new WaveFormat(_sourceFormat.SampleRate, 16, _sourceFormat.Channels)
-                : _sourceFormat;
+            _capture = CreateCapture(device, lowLatency: true);
+            ConfigureFormat();
 
             DeviceName = device.FriendlyName;
             _capture.DataAvailable += OnDataAvailable;
             _capture.RecordingStopped += OnRecordingStopped;
             _startClock = 0;
-            _capture.StartRecording();
+
+            try
+            {
+                _capture.StartRecording();
+            }
+            catch (Exception ex)
+            {
+                // A driver can refuse event-driven loopback or the short buffer. Losing the sound
+                // entirely would be far worse than the extra latency, so fall back to NAudio's
+                // defaults rather than giving up on audio.
+                Log.Debug($"低遅延の音声キャプチャを開始できませんでした（既定値で再試行）: {ex.Message}");
+
+                try
+                {
+                    _capture.DataAvailable -= OnDataAvailable;
+                    _capture.RecordingStopped -= OnRecordingStopped;
+                    _capture.Dispose();
+                }
+                catch (Exception)
+                {
+                    // Nothing left to release.
+                }
+
+                _capture = CreateCapture(device, lowLatency: false);
+                ConfigureFormat();
+                _capture.DataAvailable += OnDataAvailable;
+                _capture.RecordingStopped += OnRecordingStopped;
+                _startClock = 0;
+                _capture.StartRecording();
+            }
+
             IsRunning = true;
 
             Log.Info($"{( _kind == AudioKind.Desktop ? "デスクトップ音声" : "マイク")}を取得: " +
-                     $"{DeviceName} ({_format.SampleRate}Hz {_format.Channels}ch {_format.BitsPerSample}bit)");
+                     $"{DeviceName} ({_format!.SampleRate}Hz {_format.Channels}ch {_format.BitsPerSample}bit)");
             return true;
         }
         catch (Exception ex)
@@ -215,6 +271,56 @@ public sealed class AudioCapture : IDisposable
             Dispose();
             return false;
         }
+    }
+
+    /// <summary>
+    /// Buffer size asked of WASAPI. The audio only becomes readable once a buffer is full, so the
+    /// capture lags the picture by roughly this much: at NAudio's default of 100 ms the desktop
+    /// track measured ~190 ms behind the video (flash + beep stimulus, 2026-10-29). 20 ms puts it
+    /// at about one engine period.
+    /// </summary>
+    private const int LowLatencyBufferMilliseconds = 20;
+
+    private IWaveIn CreateCapture(MMDevice device, bool lowLatency) => _kind switch
+    {
+        AudioKind.Desktop when lowLatency => new ShortLoopbackCapture(device, LowLatencyBufferMilliseconds),
+        AudioKind.Desktop => new WasapiLoopbackCapture(device),
+        _ when lowLatency => new WasapiCapture(device, useEventSync: true, LowLatencyBufferMilliseconds),
+        _ => new WasapiCapture(device)
+    };
+
+    /// <summary>
+    /// Capture devices hand out 32-bit float; keeping that in the ring costs twice the RAM of
+    /// 16-bit PCM with no audible benefit, so it is converted on the way in.
+    /// </summary>
+    private void ConfigureFormat()
+    {
+        _sourceFormat = _capture!.WaveFormat;
+        _sourceIsFloat = _sourceFormat.Encoding == WaveFormatEncoding.IeeeFloat &&
+                         _sourceFormat.BitsPerSample == 32;
+        _sourceBlockAlign = Math.Max(1, _sourceFormat.BlockAlign);
+        _format = _sourceIsFloat
+            ? new WaveFormat(_sourceFormat.SampleRate, 16, _sourceFormat.Channels)
+            : _sourceFormat;
+    }
+
+    /// <summary>
+    /// Loopback capture with a short, event-driven buffer.
+    ///
+    /// NAudio's <see cref="WasapiLoopbackCapture"/> always asks for 100 ms and then polls, and the
+    /// data only arrives when that buffer is full - which is exactly the delay that made the sound
+    /// in saved clips sit slightly ahead of the picture. The only thing the stock class adds over
+    /// <see cref="WasapiCapture"/> is the loopback flag, so that is all this repeats.
+    /// </summary>
+    private sealed class ShortLoopbackCapture : WasapiCapture
+    {
+        public ShortLoopbackCapture(MMDevice device, int bufferMilliseconds)
+            : base(device, useEventSync: true, bufferMilliseconds)
+        {
+        }
+
+        protected override AudioClientStreamFlags GetAudioClientStreamFlags()
+            => base.GetAudioClientStreamFlags() | AudioClientStreamFlags.Loopback;
     }
 
     private void OnDataAvailable(object? sender, WaveInEventArgs e)
@@ -244,30 +350,46 @@ public sealed class AudioCapture : IDisposable
             // Keep every sample tied to its wall-clock position.
             //
             // WASAPI loopback stops delivering buffers while the endpoint is silent, and a
-            // capture device can hiccup too. Without this padding every quiet stretch slid the
-            // rest of the track earlier, so after a while the audio in a saved clip came from a
-            // completely different moment than the picture, and the tail of the clip was silent.
+            // capture device can hiccup too, so the device simply never hands over the samples
+            // for that stretch. Whatever is not padded slides the rest of the track later against
+            // the wall clock, and nothing ever pulls it back: the error grows for as long as the
+            // app runs, which is what made long sessions drift out of sync.
+            //
+            // "lag" is a level, not a per-buffer delta: it is how far the sample stream currently
+            // trails the clock. Padding exactly the shortfall returns the level to zero, so
+            // callback jitter can never be mistaken for a missing stretch and never accumulates.
+            // The budget below only decides when it is worth correcting, and it bounds the error
+            // to that budget forever instead of letting it grow.
             var now = Clock.Now;
             var expectedWall = _startClock + (_nextSampleIndex / (double)_format.SampleRate);
-            var gap = (now - chunkSeconds) - expectedWall;
-            if (gap > 0.25)
-            {
-                var gapSamples = (long)(Math.Min(gap, _retainSeconds) * _format.SampleRate);
-                var blockAlignOut = Math.Max(1, _format.BlockAlign);
-                if (gapSamples > 0)
-                {
-                    // Cap the allocation: 32 MB is ~90 s of 16-bit stereo, and the ring trims
-                    // anything older than the retained window anyway.
-                    var bytes = (int)Math.Min(gapSamples * blockAlignOut, 32L * 1024 * 1024);
-                    var silenceSamples = Math.Max(1, bytes / blockAlignOut);
+            var lag = (now - chunkSeconds) - expectedWall;
 
+            // At the very start the device can report its first buffer slightly "in the future";
+            // instead of carrying that offset for the whole session, take its word for it once.
+            if (lag < -AudioJitterBudgetSeconds && _nextSampleIndex < _format.SampleRate)
+            {
+                _startClock += lag;
+                lag = 0;
+            }
+
+            if (lag > AudioJitterBudgetSeconds)
+            {
+                var maxPad = Math.Min(lag, MaxPadSeconds);
+                var blockAlignOut = Math.Max(1, _format.BlockAlign);
+                var padding = (long)Math.Round(maxPad * _format.SampleRate);
+                if (padding > 0)
+                {
+                    var data2 = new byte[padding * blockAlignOut];
                     _chunks.AddLast(new AudioChunk
                     {
-                        Data = new byte[silenceSamples * blockAlignOut],
+                        Data = data2,
                         StartSample = _nextSampleIndex,
-                        SampleCount = silenceSamples
+                        SampleCount = padding
                     });
-                    _nextSampleIndex += silenceSamples;
+
+                    _nextSampleIndex += padding;
+                    _paddedSeconds += padding / (double)_format.SampleRate;
+                    _maxLag = Math.Max(_maxLag, lag);
                 }
             }
 
@@ -535,6 +657,8 @@ public sealed class AudioCapture : IDisposable
             _chunks.Clear();
             _nextSampleIndex = 0;
             _startClock = 0;
+            _paddedSeconds = 0;
+            _maxLag = 0;
             _peak = 0;
         }
     }
