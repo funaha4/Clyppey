@@ -940,7 +940,21 @@ public partial class ClipEditorWindow : Window
             {
                 if (target >= range.Start - 0.001 && target < range.End - 0.02)
                 {
-                    target = range.End + 0.001;
+                    // Seek to a keyframe, because Media Foundation lands on the keyframe at or
+                    // BEFORE the requested time. Asking for "end + 1 ms" landed back inside the
+                    // removed range, got skipped again and looped.
+                    var resume = range.End + 0.02;
+                    var before = KeyframeIndex.Before(_keyframes, resume);
+                    if (before >= range.End - 0.05 && before > range.Start)
+                    {
+                        // That keyframe is already past the cut, so nothing extra is lost.
+                        target = before;
+                    }
+                    else
+                    {
+                        var after = KeyframeIndex.AtOrAfter(_keyframes, resume);
+                        target = double.IsPositiveInfinity(after) ? resume : Math.Max(resume, after);
+                    }
                     moved = true;
                     break;
                 }
@@ -1083,6 +1097,11 @@ public partial class ClipEditorWindow : Window
     private void SetPlaying(bool playing)
     {
         _isPlaying = playing;
+
+        // Seeking a paused MediaElement still pushes a moment of audio, which made scrubbing the
+        // timeline click. Sound is only wanted while playback actually runs.
+        Player.IsMuted = !playing;
+
         if (!playing)
         {
             try

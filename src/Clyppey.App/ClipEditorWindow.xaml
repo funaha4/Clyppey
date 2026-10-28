@@ -51,6 +51,7 @@
                               LoadedBehavior="Manual"
                               UnloadedBehavior="Manual"
                               ScrubbingEnabled="True"
+                              IsMuted="True"
                               Stretch="Uniform"
                               MediaOpened="Player_MediaOpened"
                               MediaFailed="Player_MediaFailed" />
