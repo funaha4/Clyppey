@@ -165,7 +165,7 @@
     <sys:String x:Key="Trim.PlayHint">再生 / 一時停止（スペース）</sys:String>
     <sys:String x:Key="Trim.PrevFrame">1 フレーム戻る（←）</sys:String>
     <sys:String x:Key="Trim.NextFrame">1 フレーム進む（→）</sys:String>
-    <sys:String x:Key="Trim.Hint">スペース: 再生 · ドラッグ: 範囲選択 · 右クリック: 位置を固定</sys:String>
+    <sys:String x:Key="Trim.Hint">スペース: 再生 · ドラッグ: 範囲選択 · 右クリック: 位置を固定 · Ctrl+ホイール: 拡大</sys:String>
     <sys:String x:Key="Trim.Undo">1つ戻す</sys:String>
     <sys:String x:Key="Trim.Clear">すべて戻す</sys:String>
     <sys:String x:Key="Trim.Removed">削除</sys:String>
@@ -190,5 +190,7 @@
     <sys:String x:Key="Trim.EdgeStart">開始 {0} を調整中（←/→ で 1 フレーム）</sys:String>
     <sys:String x:Key="Trim.EdgeEnd">終了 {0} を調整中（←/→ で 1 フレーム）</sys:String>
     <sys:String x:Key="Trim.PlayFromStart">最初から再生</sys:String>
+    <sys:String x:Key="Trim.Fit">全体</sys:String>
+    <sys:String x:Key="Trim.Zoom">{0} 倍</sys:String>
 
 </ResourceDictionary>

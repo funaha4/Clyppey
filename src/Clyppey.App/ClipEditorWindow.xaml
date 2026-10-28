@@ -64,7 +64,11 @@
             <Border Grid.Row="2" Margin="18,12,18,0" Background="{StaticResource SurfaceBrush}"
                     BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="12">
                 <Grid ClipToBounds="True" Height="104">
-                    <Image x:Name="FilmstripImage" Stretch="Fill" Opacity="0.42" Margin="1" />
+                    <!-- The strip only covers the window it was rendered for, so it is placed
+                         and sized by code and moves as the view is panned or zoomed. -->
+                    <Image x:Name="FilmstripImage" Stretch="Fill" Opacity="0.42"
+                           HorizontalAlignment="Left" Margin="1"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
                     <Canvas x:Name="TimelineCanvas" Background="Transparent" ClipToBounds="True"
                             Cursor="Hand" SizeChanged="TimelineCanvas_SizeChanged"
                             MouseLeftButtonDown="Timeline_MouseLeftButtonDown"
@@ -72,6 +76,7 @@
                             MouseMove="Timeline_MouseMove"
                             MouseLeftButtonUp="Timeline_MouseLeftButtonUp"
                             MouseLeave="Timeline_MouseLeave"
+                            MouseWheel="Timeline_MouseWheel"
                             LostMouseCapture="Timeline_LostMouseCapture" />
                 </Grid>
             </Border>
@@ -109,6 +114,16 @@
                 <TextBlock Grid.Column="1" Text="{DynamicResource Trim.Hint}" Style="{StaticResource Caption}"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" Margin="12,0" />
+
+                <!-- How far the timeline is zoomed in, plus a way back out. The button only
+                     appears while zoomed, so the row stays quiet at the default view. -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="ZoomText" Style="{StaticResource Mono}" FontSize="12"
+                               Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+                    <Button x:Name="FitButton" Content="{DynamicResource Trim.Fit}"
+                            Style="{StaticResource GhostButton}" Padding="8,6" Margin="8,0,0,0"
+                            Visibility="Collapsed" Click="Fit_Click" />
+                </StackPanel>
             </Grid>
 
             <!-- ============================== selection actions ============================== -->

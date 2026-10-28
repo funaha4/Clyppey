@@ -30,6 +30,7 @@ public partial class ClipEditorWindow : Window
     private readonly IReadOnlyList<TimeRange>? _initialCuts;
     private readonly TimeRange? _initialSelection;
     private readonly double? _initialPin;
+    private readonly double? _initialViewSeconds;
     private readonly CutList _cuts = new();
     private readonly DispatcherTimer _timer;
     private readonly TaskCompletionSource<bool> _loadedSignal = new();
@@ -64,6 +65,13 @@ public partial class ClipEditorWindow : Window
     private const double EdgeHitPixels = 6;
     private const double ClickSlopPixels = 4;
 
+    // Timeline zoom + filmstrip geometry.
+    private const double MinViewSeconds = 0.5;      // closest the timeline can zoom in
+    private const double StripCellPixels = 18;      // screen width one thumbnail should cover
+    private const int MaxStripBitmapWidth = 15_000; // stays inside WPF's 16k texture limit
+    private const int MaxStripThumbs = 240;
+    private const double StripKeyframeOnlyAbove = 0.75;  // seconds/thumb where decoding all frames is waste
+
     private DateTime _lastHoverSeekUtc = DateTime.MinValue;
     private double _lastHoverSeconds = -1;
     private double? _lastSkipTarget;
@@ -75,6 +83,20 @@ public partial class ClipEditorWindow : Window
     private bool _confirmedClose;
     private DateTime _openedAtUtc = DateTime.UtcNow;
 
+    // Only the visible slice of the clip is drawn. Zooming moves these two numbers; everything
+    // on the timeline goes through XAt/TimeAt so the rest of the editor needed no changes.
+    private double _viewStart;
+    private double _viewEnd = -1;
+    private double? _devViewSeconds;
+
+    private WriteableBitmap? _stripBitmap;
+    private double _stripStart;
+    private double _stripEnd;
+    private bool _stripComplete;
+    private bool _stripBuilding;
+    private bool _stripDirty;
+    private DispatcherTimer? _stripDebounce;
+
     public ClipEditorWindow(
         ClipEntry clip,
         string ffmpegPath,
@@ -83,7 +105,8 @@ public partial class ClipEditorWindow : Window
         TimeRange? initialSelection = null,
         double? initialPin = null,
         int initialHoverEdge = 0,
-        int initialArmedEdge = 0)
+        int initialArmedEdge = 0,
+        double? initialViewSeconds = null)
     {
         InitializeComponent();
 
@@ -93,6 +116,7 @@ public partial class ClipEditorWindow : Window
         _initialCuts = initialCuts;
         _initialSelection = initialSelection;
         _initialPin = initialPin;
+        _initialViewSeconds = initialViewSeconds;
         _hoverEdge = initialHoverEdge;
 
         if (initialArmedEdge != 0)
@@ -142,6 +166,9 @@ public partial class ClipEditorWindow : Window
         _mediaReady && _media is not null
             ? Math.Clamp(Player.Position.TotalSeconds, 0, _media.Duration)
             : 0;
+
+    /// <summary>Completes once the clip, its keyframes and the filmstrip are on screen.</summary>
+    public Task LoadedTask => _loadedSignal.Task;
 
     /// <summary>
     /// Where the playhead should be drawn, and where a mark lands.
@@ -209,10 +236,26 @@ public partial class ClipEditorWindow : Window
 
             BusyText.Visibility = Visibility.Collapsed;
             _openedAtUtc = DateTime.UtcNow;
+
+            // The whole clip fills the bar until the user zooms. Set before the first draw,
+            // because every position on the timeline is derived from this window.
+            _viewStart = 0;
+            _viewEnd = _media.Duration;
+
+            if (_initialViewSeconds is { } viewLength && viewLength > 0 && viewLength < _media.Duration)
+            {
+                // Development only: open zoomed in. Applied after the first strip so a snapshot
+                // also exercises the "view changed, rebuild the strip" path.
+                _devViewSeconds = Math.Max(MinViewSeconds, viewLength);
+            }
+
             UpdateKeptText();
             RedrawTimeline();
 
-            _keyframes = await KeyframeIndex.ReadAsync(_ffmpegPath, _clip.Path).ConfigureAwait(true);
+            // The keyframe index only adds ticks to the bar, so it runs alongside the filmstrip
+            // instead of in front of it. Measured on a 60 s clip: 1.8 s and ~3 s of ffmpeg that
+            // used to be done one after the other.
+            var keyframes = KeyframeIndex.ReadAsync(_ffmpegPath, _clip.Path);
 
             if (_initialCuts is { Count: > 0 })
             {
@@ -238,7 +281,18 @@ public partial class ClipEditorWindow : Window
 
             RedrawTimeline();
 
-            await LoadFilmstripAsync().ConfigureAwait(true);
+            await Task.WhenAll(keyframes, EnsureFilmstripAsync(true)).ConfigureAwait(true);
+
+            _keyframes = await keyframes.ConfigureAwait(true);
+            RedrawTimeline();
+
+            if (_devViewSeconds is { } devView && _media is { IsValid: true })
+            {
+                var anchor = _initialPin ?? (_media.Duration * 0.25);
+                var length = Math.Min(devView, _media.Duration);
+                SetView(anchor - (length * 0.3), length);
+                await EnsureFilmstripAsync(true).ConfigureAwait(true);
+            }
         }
         catch (Exception ex)
         {
@@ -252,54 +306,453 @@ public partial class ClipEditorWindow : Window
     }
 
     /// <summary>
-    /// One image strip, one thumbnail per second, so the kills can be spotted without
-    /// scrubbing. Generated on demand and deleted right after it is loaded into memory.
+    /// Thumbnails for the visible window, so the kills can be spotted without scrubbing.
+    ///
+    /// The strip used to be one ffmpeg run over the whole clip ("fps=N,tile=Nx1"), which had to
+    /// decode every frame before anything appeared: 3.6 s for a 60 s clip, and nothing on screen
+    /// while it ran. Here the window is cut into a few short runs, each painted into the bitmap
+    /// as it arrives, so the left edge is visible in about a third of a second and the rest fills
+    /// in. Zooming only re-reads the visible part of the file, which is why it stays responsive.
     /// </summary>
-    private async Task LoadFilmstripAsync()
+    private async Task EnsureFilmstripAsync(bool force = false)
+    {
+        if (_stripBuilding)
+        {
+            _stripDirty = true;
+            return;
+        }
+
+        if (_media is not { IsValid: true } || TimelineCanvas.ActualWidth < 40)
+        {
+            return;
+        }
+
+        _stripBuilding = true;
+        try
+        {
+            // This call owns the strip now; a queued debounce request would only abort it.
+            _stripDebounce?.Stop();
+
+            // A second pass covers a view change that happened while the strip was rendering.
+            for (var pass = 0; pass < 3; pass++)
+            {
+                _stripDirty = false;
+
+                if (!force && !StripNeedsRebuild())
+                {
+                    return;
+                }
+
+                force = false;
+                await RenderFilmstripAsync().ConfigureAwait(true);
+
+                if (!_stripDirty)
+                {
+                    return;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug($"フィルムストリップを作れません: {ex.Message}");
+        }
+        finally
+        {
+            _stripBuilding = false;
+        }
+    }
+
+    /// <summary>True when the current strip does not cover the view, or is too coarse for it.</summary>
+    private bool StripNeedsRebuild()
+    {
+        if (_stripBitmap is null || !_stripComplete || _stripEnd - _stripStart <= 0.001
+            || _media is not { IsValid: true } media)
+        {
+            return true;
+        }
+
+        var covered = _stripStart <= _viewStart + 0.001 && _stripEnd >= _viewEnd - 0.001;
+        if (!covered)
+        {
+            return true;
+        }
+
+        // Both sides in thumbnails per second: the bitmap one has to be divided by the thumbnail
+        // width, or a full-view strip would look dense enough for any zoom level.
+        var cellsPerSecond = _stripBitmap.PixelWidth
+            / (double)PlannedThumbSize(media).Width
+            / (_stripEnd - _stripStart);
+
+        return cellsPerSecond < (1.0 / PlannedSecondsPerThumb()) * 0.95;
+    }
+
+    private double PlannedSecondsPerThumb()
+    {
+        var span = Math.Max(0.2, _viewEnd - _viewStart);
+        return span / Math.Max(2, PlannedThumbCount());
+    }
+
+    private int PlannedThumbCount()
+    {
+        if (_media is not { IsValid: true } media)
+        {
+            return 8;
+        }
+
+        var byPixels = (int)Math.Round(TimelineCanvas.ActualWidth / StripCellPixels);
+        var byTexture = Math.Max(8, (int)(MaxStripBitmapWidth / (double)PlannedThumbSize(media).Width));
+
+        return Math.Clamp(byPixels, 8, Math.Min(MaxStripThumbs, byTexture));
+    }
+
+    /// <summary>
+    /// One thumbnail in pixels: as tall as the bar so the strip is never upscaled (it is drawn
+    /// squashed horizontally, which is what gives the strip its smear), and frame-shaped so the
+    /// picture is not distorted on top of that.
+    /// </summary>
+    private (int Width, int Height) PlannedThumbSize(MediaInfo media)
+    {
+        var height = Math.Clamp((int)Math.Round(TimelineCanvas.ActualHeight) - 2, 16, 200);
+        var aspect = media.Width / (double)Math.Max(1, media.Height);
+        var width = Math.Clamp((int)Math.Round(height * aspect), 8, 640);
+        return (width, height);
+    }
+
+    private async Task RenderFilmstripAsync()
+    {
+        if (_media is not { IsValid: true } media)
+        {
+            return;
+        }
+
+        var width = TimelineCanvas.ActualWidth;
+        if (width < 40)
+        {
+            return;
+        }
+
+        var start = _viewStart;
+        var end = _viewEnd;
+        var span = Math.Max(0.2, end - start);
+        var thumbs = PlannedThumbCount();
+        var secondsPerThumb = span / thumbs;
+        var thumb = PlannedThumbSize(media);
+
+        var bitmap = new WriteableBitmap(
+            thumbs * thumb.Width, thumb.Height, 96, 96, PixelFormats.Bgra32, null);
+
+        // Swap the strip in straight away: the unfilled part is transparent, so the bar keeps
+        // its normal surface and the thumbnails fill it in from the left. "Complete" only means
+        // every chunk landed; until then the next request must rebuild rather than trust it.
+        _stripBitmap = bitmap;
+        _stripStart = start;
+        _stripEnd = end;
+        _stripComplete = false;
+        FilmstripImage.Source = bitmap;
+        UpdateStripGeometry();
+
+        // Long windows sample keyframes only (the capture writes one per second), which turns a
+        // full-frame decode into a handful of frames. Short windows are cheap anyway and need
+        // real frames to stay sharp, so they decode everything.
+        var keyframeOnly = secondsPerThumb >= StripKeyframeOnlyAbove;
+
+        var chunks = Math.Clamp((int)Math.Round(span / 7.0), 1, 8);
+        var thumbsPerChunk = (int)Math.Ceiling(thumbs / (double)chunks);
+
+        Directory.CreateDirectory(AppPaths.TempDir);
+
+        for (var first = 0; first < thumbs; first += thumbsPerChunk)
+        {
+            var count = Math.Min(thumbsPerChunk, thumbs - first);
+            var chunkStart = start + (first * secondsPerThumb);
+            var chunkSeconds = count * secondsPerThumb;
+            var file = Path.Combine(AppPaths.TempDir, $"strip_{Guid.NewGuid():N}.png");
+
+            var rate = (1.0 / secondsPerThumb).ToString("0.######", CultureInfo.InvariantCulture);
+            var filters = $"fps={rate},scale={thumb.Width}:{thumb.Height},tile={count}x1";
+
+            var args = new List<string>
+            {
+                "-y", "-v", "error", "-nostdin",
+                "-ss", chunkStart.ToString("0.###", CultureInfo.InvariantCulture)
+            };
+
+            if (keyframeOnly)
+            {
+                args.Add("-skip_frame");
+                args.Add("nokey");
+            }
+
+            args.Add("-i");
+            args.Add(_clip.Path);
+            args.Add("-t");
+            args.Add((chunkSeconds + 0.5).ToString("0.###", CultureInfo.InvariantCulture));
+            args.Add("-an");
+            args.Add("-vf");
+            args.Add(filters);
+            args.Add("-frames:v");
+            args.Add("1");
+            args.Add(file);
+
+            try
+            {
+                var (success, error) = await ProcessRunner.RunAsync(_ffmpegPath, args, 20_000).ConfigureAwait(true);
+                if (_stripDirty)
+                {
+                    // The user moved the view; this chunk is already obsolete.
+                    return;
+                }
+
+                if (!success || !File.Exists(file))
+                {
+                    Log.Debug($"フィルムストリップの一部を作れません: {error}");
+                    continue;
+                }
+
+                PaintStripChunk(bitmap, file, first * thumb.Width, count, thumb.Width, thumb.Height);
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(file))
+                    {
+                        File.Delete(file);
+                    }
+                }
+                catch (Exception)
+                {
+                    // A leftover temp image is harmless.
+                }
+            }
+        }
+
+        _stripComplete = true;
+    }
+
+    private static void PaintStripChunk(
+        WriteableBitmap bitmap, string file, int left, int expected, int thumbWidth, int thumbHeight)
+    {
+        var image = new BitmapImage();
+        image.BeginInit();
+        image.UriSource = new Uri(file);
+        image.CacheOption = BitmapCacheOption.OnLoad;
+        image.EndInit();
+        image.Freeze();
+
+        // A short chunk (end of the clip) yields fewer tiles than planned; copy what exists.
+        var copyWidth = Math.Min(image.PixelWidth, expected * thumbWidth);
+        var copyHeight = Math.Min(image.PixelHeight, thumbHeight);
+        if (copyWidth <= 0 || copyHeight <= 0 || left >= bitmap.PixelWidth)
+        {
+            return;
+        }
+
+        copyWidth = Math.Min(copyWidth, bitmap.PixelWidth - left);
+
+        BitmapSource source = image;
+        if (image.Format != PixelFormats.Bgra32)
+        {
+            var converted = new FormatConvertedBitmap(image, PixelFormats.Bgra32, null, 0);
+            converted.Freeze();
+            source = converted;
+        }
+
+        // WritePixels has no BitmapSource overload: copy the tiles into a byte[] first.
+        var stride = copyWidth * 4;
+        var buffer = new byte[stride * copyHeight];
+        source.CopyPixels(new Int32Rect(0, 0, copyWidth, copyHeight), buffer, stride, 0);
+        bitmap.WritePixels(new Int32Rect(left, 0, copyWidth, copyHeight), buffer, stride, 0);
+    }
+
+    /// <summary>Places the strip over the window it was rendered for, which moves as the view does.</summary>
+    private void UpdateStripGeometry()
+    {
+        if (_stripBitmap is null || _media is null || TimelineCanvas.ActualWidth < 20)
+        {
+            FilmstripImage.Source = null;
+            return;
+        }
+
+        var left = XAt(_stripStart);
+        var right = XAt(_stripEnd);
+        var width = Math.Max(1.0, right - left);
+
+        FilmstripImage.Width = width;
+        FilmstripImage.Margin = new Thickness(left, 1, 0, 1);
+    }
+
+    // ---------------------------------------------------------------- view window
+
+    /// <summary>Length of the clip, or 0 before the probe has finished.</summary>
+    private double FullSeconds => _media?.Duration ?? 0;
+
+    /// <summary>Seconds currently mapped onto the full width of the timeline.</summary>
+    private double ViewLength => Math.Max(0.001, _viewEnd - _viewStart);
+
+    private bool IsZoomed => _media is not null && ViewLength < FullSeconds - 0.01;
+
+    /// <summary>Timeline x for a clip time. The only place the zoom is applied to drawing.</summary>
+    private double XAt(double seconds) =>
+        (seconds - _viewStart) / ViewLength * TimelineCanvas.ActualWidth;
+
+    /// <summary>Clip time under a timeline x. The only place the zoom is applied to input.</summary>
+    private double TimeAt(double x)
+    {
+        var width = TimelineCanvas.ActualWidth;
+        if (_media is null || width <= 0)
+        {
+            return _viewStart;
+        }
+
+        return _viewStart + Math.Clamp(x / width, 0, 1) * ViewLength;
+    }
+
+    private double EdgeToleranceSeconds()
+    {
+        var width = TimelineCanvas.ActualWidth;
+        return width < 20 ? 0 : EdgeHitPixels / width * ViewLength;
+    }
+
+    /// <summary>Shows [start, start + length] and refreshes everything that depends on it.</summary>
+    private void SetView(double start, double length)
     {
         if (_media is null)
         {
             return;
         }
 
-        var count = Math.Clamp((int)Math.Ceiling(_media.Duration), 1, 120);
-        var rate = (count / Math.Max(_media.Duration, 0.1)).ToString("0.######", CultureInfo.InvariantCulture);
+        var full = FullSeconds;
+        length = Math.Clamp(length, Math.Min(MinViewSeconds, full), full);
+        start = Math.Clamp(start, 0, Math.Max(0, full - length));
 
-        Directory.CreateDirectory(AppPaths.TempDir);
-        var file = Path.Combine(AppPaths.TempDir, "strip_" + Guid.NewGuid().ToString("N")[..8] + ".png");
+        _viewStart = start;
+        _viewEnd = Math.Min(full, start + length);
 
-        var args = new[]
+        RedrawTimeline();
+        UpdateZoomUi();
+        RequestFilmstrip();
+    }
+
+    private void FitView()
+    {
+        if (_media is null)
         {
-            "-y", "-v", "error",
-            "-i", _clip.Path,
-            "-vf", $"fps={rate},scale=160:-2,tile={count}x1",
-            "-frames:v", "1",
-            file
-        };
-
-        var (success, error) = await ProcessRunner.RunAsync(_ffmpegPath, args, 30_000).ConfigureAwait(true);
-        if (!success || !File.Exists(file))
-        {
-            Log.Debug($"フィルムストリップを作れません: {error}");
             return;
         }
 
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.UriSource = new Uri(file);
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.EndInit();
-        bitmap.Freeze();
-        FilmstripImage.Source = bitmap;
+        SetView(0, FullSeconds);
+    }
 
-        try
+    /// <summary>Zooms about a clip time, so whatever is under the cursor stays under it.</summary>
+    private void ZoomAround(double anchorSeconds, double factor)
+    {
+        if (_media is null)
         {
-            File.Delete(file);
+            return;
         }
-        catch (Exception)
+
+        var width = TimelineCanvas.ActualWidth;
+        var fraction = width > 1 ? Math.Clamp((anchorSeconds - _viewStart) / ViewLength, 0, 1) : 0.5;
+        var length = Math.Clamp(ViewLength * factor, Math.Min(MinViewSeconds, FullSeconds), FullSeconds);
+        SetView(anchorSeconds - (fraction * length), length);
+    }
+
+    private void UpdateZoomUi()
+    {
+        var zoom = FullSeconds / ViewLength;
+        ZoomText.Text = Math.Abs(zoom - 1) < 0.005
+            ? string.Empty
+            : Loc.F("Trim.Zoom", zoom.ToString(zoom < 10 ? "0.0" : "0", CultureInfo.InvariantCulture));
+        FitButton.Visibility = IsZoomed ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void Timeline_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (_media is null || _busy)
         {
-            // A leftover temp image is harmless.
+            return;
         }
+
+        var steps = e.Delta / 120.0;
+        if (steps == 0)
+        {
+            return;
+        }
+
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            // Wheel up zooms in. 1.25 per notch keeps a 60 s clip reachable in about a dozen
+            // turns instead of overshooting on a free-spinning wheel.
+            ZoomAround(TimeAt(e.GetPosition(TimelineCanvas).X), Math.Pow(1 / 1.25, steps));
+        }
+        else if (IsZoomed)
+        {
+            PanBy(-steps * ViewLength * 0.12);
+        }
+        else
+        {
+            return;
+        }
+
+        e.Handled = true;
+    }
+
+    private void PanBy(double deltaSeconds)
+    {
+        if (!IsZoomed)
+        {
+            return;
+        }
+
+        SetView(_viewStart + deltaSeconds, ViewLength);
+    }
+
+    private void Fit_Click(object sender, RoutedEventArgs e)
+    {
+        SetPlaying(false);
+        FitView();
+    }
+
+    /// <summary>Pushes the view along while playing, so a zoomed-in playhead cannot leave it.</summary>
+    private void FollowPlayheadDuringPlayback()
+    {
+        if (!_isPlaying || _media is null)
+        {
+            return;
+        }
+
+        var length = ViewLength;
+        if (length >= FullSeconds - 0.01)
+        {
+            return;
+        }
+
+        var seconds = CurrentSeconds;
+        if (seconds >= _viewStart && seconds <= _viewEnd - (length * 0.02))
+        {
+            return;
+        }
+
+        SetView(seconds - (length * 0.1), length);
+    }
+
+    private void RequestFilmstrip()
+    {
+        _stripDirty = true;
+
+        if (_stripDebounce is null)
+        {
+            _stripDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
+            _stripDebounce.Tick += (_, _) =>
+            {
+                _stripDebounce!.Stop();
+                _ = EnsureFilmstripAsync();
+            };
+        }
+
+        _stripDebounce.Stop();
+        _stripDebounce.Start();
     }
 
     // ---------------------------------------------------------------- timeline
@@ -321,8 +774,6 @@ public partial class ClipEditorWindow : Window
         _handleLeft = null;
         _handleRight = null;
 
-        var duration = _media.Duration;
-
         // Keyframe ticks: the only places a copy-mode cut can start.
         foreach (var keyframe in _keyframes)
         {
@@ -332,14 +783,14 @@ public partial class ClipEditorWindow : Window
                 Height = height * 0.18,
                 Background = new SolidColorBrush(Color.FromArgb(0x3C, 0xFF, 0xFF, 0xFF))
             };
-            Canvas.SetLeft(tick, keyframe / duration * width);
+            Canvas.SetLeft(tick, XAt(keyframe));
             Canvas.SetTop(tick, height * 0.82);
             TimelineCanvas.Children.Add(tick);
         }
 
         foreach (var range in _cuts.Removed)
         {
-            var boxWidth = Math.Max(3, range.Duration / duration * width);
+            var boxWidth = Math.Max(3, (range.End - range.Start) / ViewLength * width);
             var box = new Border
             {
                 Width = boxWidth,
@@ -362,7 +813,7 @@ public partial class ClipEditorWindow : Window
                 };
             }
 
-            Canvas.SetLeft(box, range.Start / duration * width);
+            Canvas.SetLeft(box, XAt(range.Start));
             TimelineCanvas.Children.Add(box);
         }
 
@@ -415,9 +866,12 @@ public partial class ClipEditorWindow : Window
             Height = height,
             Background = (Brush)FindResource("AccentBrush")
         };
-        Canvas.SetLeft(playhead, CurrentSeconds / duration * width);
+        Canvas.SetLeft(playhead, XAt(CurrentSeconds));
         TimelineCanvas.Children.Add(playhead);
         _playhead = playhead;
+
+        UpdateStripGeometry();
+        UpdateZoomUi();
     }
 
     /// <summary>Whatever the user is currently pointing at (a dragged or adjusted range).</summary>
@@ -446,8 +900,8 @@ public partial class ClipEditorWindow : Window
             return;
         }
 
-        var from = band.Start / _media.Duration * width;
-        var to = band.End / _media.Duration * width;
+        var from = XAt(band.Start);
+        var to = XAt(band.End);
         var pixels = Math.Max(1, to - from);
 
         _focusFill.Visibility = Visibility.Visible;
@@ -543,7 +997,7 @@ public partial class ClipEditorWindow : Window
             return 0;
         }
 
-        var tolerance = EdgeHitPixels / width * _media.Duration;
+        var tolerance = EdgeToleranceSeconds();
         if (Math.Abs(seconds - selection.Start) <= tolerance)
         {
             return -1;
@@ -582,26 +1036,23 @@ public partial class ClipEditorWindow : Window
             return;
         }
 
-        Canvas.SetLeft(_playhead, Math.Clamp(seconds / _media.Duration, 0, 1) * width);
+        // Zoomed in, the playhead can sit outside the window; there is nothing to draw then.
+        if (seconds < _viewStart - 0.0005 || seconds > _viewEnd + 0.0005)
+        {
+            _playhead.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        Canvas.SetLeft(_playhead, Math.Clamp(XAt(seconds), 0, width - 2));
     }
 
-    private void TimelineCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => RedrawTimeline();
-
-    private double SecondsAt(Point point)
+    private void TimelineCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (_media is null)
-        {
-            return 0;
-        }
-
-        var width = TimelineCanvas.ActualWidth;
-        if (width <= 0)
-        {
-            return 0;
-        }
-
-        return Math.Clamp(point.X / width, 0, 1) * _media.Duration;
+        RedrawTimeline();
+        RequestFilmstrip();
     }
+
+    private double SecondsAt(Point point) => TimeAt(point.X);
 
     private void Timeline_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -715,7 +1166,7 @@ public partial class ClipEditorWindow : Window
         {
             // Below the slop this is a click, not a drag: the existing selection must survive it.
             var candidate = TimeRange.Normalized(_dragAnchor, pointer);
-            var slop = ClickSlopPixels / Math.Max(1.0, TimelineCanvas.ActualWidth) * _media.Duration;
+            var slop = ClickSlopPixels / Math.Max(1.0, TimelineCanvas.ActualWidth) * ViewLength;
             _selection = candidate.Duration >= slop ? candidate : null;
         }
 
@@ -1026,6 +1477,9 @@ public partial class ClipEditorWindow : Window
         {
             SetPlaying(false);
         }
+
+        // Zoomed in, the view follows playback instead of letting the playhead run off the bar.
+        FollowPlayheadDuringPlayback();
 
         // Some clips open for probing but never hand a frame to Media Foundation (unusual
         // profiles). Say so instead of leaving the user with a black rectangle.

@@ -165,7 +165,7 @@
     <sys:String x:Key="Trim.PlayHint">Play / pause (Space)</sys:String>
     <sys:String x:Key="Trim.PrevFrame">Back one frame (←)</sys:String>
     <sys:String x:Key="Trim.NextFrame">Forward one frame (→)</sys:String>
-    <sys:String x:Key="Trim.Hint">Space: play · drag: select a range · right-click: pin the playhead</sys:String>
+    <sys:String x:Key="Trim.Hint">Space: play · drag: select a range · right-click: pin the playhead · Ctrl+wheel: zoom</sys:String>
     <sys:String x:Key="Trim.Undo">Undo last</sys:String>
     <sys:String x:Key="Trim.Clear">Clear all</sys:String>
     <sys:String x:Key="Trim.Removed">Removed</sys:String>
@@ -190,5 +190,7 @@
     <sys:String x:Key="Trim.EdgeStart">Adjusting start {0} (←/→ = 1 frame)</sys:String>
     <sys:String x:Key="Trim.EdgeEnd">Adjusting end {0} (←/→ = 1 frame)</sys:String>
     <sys:String x:Key="Trim.PlayFromStart">Play from the start</sys:String>
+    <sys:String x:Key="Trim.Fit">Fit</sys:String>
+    <sys:String x:Key="Trim.Zoom">{0}×</sys:String>
 
 </ResourceDictionary>

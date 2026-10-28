@@ -7,6 +7,9 @@
     <AssemblyName>Clyppey</AssemblyName>
     <ApplicationIcon>Assets\clyppey.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- WFAC010 asks WinForms apps to move the DPI setting out of app.manifest. This is a WPF
+         app: WPF takes per-monitor DPI from the manifest, so the declaration has to stay. -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Clyppey.Core\Clyppey.Core.csproj" />

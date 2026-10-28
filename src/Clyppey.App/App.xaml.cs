@@ -96,7 +96,14 @@ public partial class App : Application
                     : 0,
                 initialArmedEdge: int.TryParse(GetArgumentValue(e.Args, "--editor-arm-edge"), out var armEdge)
                     ? armEdge
-                    : 0);
+                    : 0,
+                initialViewSeconds: double.TryParse(
+                    GetArgumentValue(e.Args, "--editor-zoom"),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var viewSeconds)
+                    ? viewSeconds
+                    : null);
             editor.Show();
 
             if (e.Args.Any(a => string.Equals(a, "--editor-export", StringComparison.OrdinalIgnoreCase)))
@@ -105,7 +112,7 @@ public partial class App : Application
                 return;
             }
 
-            CaptureEditorAndQuit(editor, screenshotPath);
+            CaptureEditorAndQuit(editor, screenshotPath, editor.LoadedTask);
             return;
         }
 
@@ -442,26 +449,26 @@ public partial class App : Application
         encoder.Save(stream);
     }
 
-    private void CaptureEditorAndQuit(Window window, string path)
+    private async void CaptureEditorAndQuit(Window window, string path, Task ready)
     {
-        // Long enough for the probe, the keyframe index and the filmstrip to land.
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(7) };
-        timer.Tick += (_, _) =>
+        try
         {
-            timer.Stop();
-            try
-            {
-                CaptureWindowToFile(window, path);
-            }
-            catch (Exception ex)
-            {
-                Log.Error("エディタのスクリーンショットに失敗", ex);
-            }
+            // Wait for the probe, the keyframe index and the filmstrip instead of guessing a
+            // delay: a fixed timer either cut the strip short or wasted time on every run.
+            await Task.WhenAny(ready, Task.Delay(TimeSpan.FromSeconds(25))).ConfigureAwait(true);
 
-            _quitting = true;
-            Shutdown();
-        };
-        timer.Start();
+            // One more layout pass so the last painted chunk reaches the screen.
+            await Task.Delay(300).ConfigureAwait(true);
+
+            CaptureWindowToFile(window, path);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("エディタのスクリーンショットに失敗", ex);
+        }
+
+        _quitting = true;
+        Shutdown();
     }
 
     /// <summary>Dev only: drives the editor's export path end to end and reports the outcome.</summary>
