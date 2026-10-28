@@ -188,6 +188,8 @@
     <sys:String x:Key="Trim.Invert">反転</sys:String>
     <sys:String x:Key="Trim.KeptOnly">{0} 秒だけ残します（外側を削除）</sys:String>
     <sys:String x:Key="Trim.PinnedTime">固定 {0} / {1}</sys:String>
+    <sys:String x:Key="Trim.EdgeStart">開始 {0} を調整中（←/→ で 1 フレーム）</sys:String>
+    <sys:String x:Key="Trim.EdgeEnd">終了 {0} を調整中（←/→ で 1 フレーム）</sys:String>
     <sys:String x:Key="Trim.PlayFromStart">最初から再生</sys:String>
 
 </ResourceDictionary>

@@ -90,7 +90,10 @@ public partial class App : Application
                     System.Globalization.CultureInfo.InvariantCulture,
                     out var pinSeconds)
                     ? pinSeconds
-                    : null);
+                    : null,
+                initialHoverEdge: int.TryParse(GetArgumentValue(e.Args, "--editor-hover-edge"), out var hoverEdge)
+                    ? hoverEdge
+                    : 0);
             editor.Show();
 
             if (e.Args.Any(a => string.Equals(a, "--editor-export", StringComparison.OrdinalIgnoreCase)))

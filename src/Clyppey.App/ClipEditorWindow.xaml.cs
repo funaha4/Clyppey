@@ -56,6 +56,8 @@ public partial class ClipEditorWindow : Window
     private bool _playerAuthoritative;
     private double _pointerSeconds;
     private double? _pinnedSeconds;
+    private int _hoverEdge;
+    private Brush _edgeBrush = Brushes.Aquamarine;
     private Brush _accentBrush = Brushes.Aquamarine;
     private Brush _warnBrush = Brushes.Gold;
     private const int PreviewSeekIntervalMs = 110;
@@ -79,7 +81,8 @@ public partial class ClipEditorWindow : Window
         Action<string, double>? onSaved = null,
         IReadOnlyList<TimeRange>? initialCuts = null,
         TimeRange? initialSelection = null,
-        double? initialPin = null)
+        double? initialPin = null,
+        int initialHoverEdge = 0)
     {
         InitializeComponent();
 
@@ -89,11 +92,13 @@ public partial class ClipEditorWindow : Window
         _initialCuts = initialCuts;
         _initialSelection = initialSelection;
         _initialPin = initialPin;
+        _hoverEdge = initialHoverEdge;
 
         ClipNameText.Text = clip.FileName;
         FileNameBox.Text = Path.GetFileNameWithoutExtension(clip.FileName) + "_cut.mp4";
         _accentBrush = (Brush)FindResource("AccentBrush");
         _warnBrush = (Brush)FindResource("WarnBrush");
+        _edgeBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x5E, 0xEA, 0xD8));
 
         ModeBox.Items.Add(Loc.T("Trim.ModeExact"));
         ModeBox.Items.Add(Loc.T("Trim.ModeFast"));
@@ -343,14 +348,14 @@ public partial class ClipEditorWindow : Window
         {
             Width = 2,
             Height = height,
-            Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x5E, 0xEA, 0xD8)),
+            Background = _edgeBrush,
             Visibility = Visibility.Collapsed
         };
         var focusRight = new Border
         {
             Width = 2,
             Height = height,
-            Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x5E, 0xEA, 0xD8)),
+            Background = _edgeBrush,
             Visibility = Visibility.Collapsed
         };
 
@@ -432,12 +437,28 @@ public partial class ClipEditorWindow : Window
         _focusFill.Width = pixels;
         Canvas.SetLeft(_focusFill, from);
 
-        _focusLeft.Visibility = Visibility.Visible;
-        Canvas.SetLeft(_focusLeft, from);
+        // The edge under the pointer (or being dragged) turns amber and gets thicker, so it is
+        // obvious which end the arrow keys would move.
+        var hot = _edgeDrag ? (_edgeIsStart ? -1 : 1) : _hoverEdge;
 
-        // Two edges on top of each other just reads as a thicker line, so one is enough.
-        if (pixels < 6)
+        var leftHot = hot == -1;
+        _focusLeft.Width = leftHot ? 4 : 2;
+        _focusLeft.Background = leftHot ? _warnBrush : _edgeBrush;
+        _focusLeft.Visibility = Visibility.Visible;
+        Canvas.SetLeft(_focusLeft, leftHot ? from - 1 : from);
+
+        var rightHot = hot == 1;
+        _focusRight.Width = rightHot ? 4 : 2;
+        _focusRight.Background = rightHot ? _warnBrush : _edgeBrush;
+
+        if (rightHot)
         {
+            _focusRight.Visibility = Visibility.Visible;
+            Canvas.SetLeft(_focusRight, to - 3);
+        }
+        else if (pixels < 6)
+        {
+            // Two edges on top of each other just reads as a thicker line, so one is enough.
             _focusRight.Visibility = Visibility.Collapsed;
         }
         else
@@ -448,21 +469,35 @@ public partial class ClipEditorWindow : Window
 
         // Handles only exist for a real selection; the I/O preview range has nothing to grab.
         var grabbable = _selection is not null;
-        var top = Math.Max(0, (TimelineCanvas.ActualHeight - 16) / 2);
+        var canvasHeight = TimelineCanvas.ActualHeight;
 
-        if (_handleLeft is not null)
+        ApplyHandle(_handleLeft, grabbable, leftHot, from, canvasHeight);
+        ApplyHandle(_handleRight, grabbable, rightHot, to, canvasHeight);
+    }
+
+    private void ApplyHandle(Border? handle, bool visible, bool hot, double x, double canvasHeight)
+    {
+        if (handle is null)
         {
-            _handleLeft.Visibility = grabbable ? Visibility.Visible : Visibility.Collapsed;
-            Canvas.SetLeft(_handleLeft, from - 4);
-            Canvas.SetTop(_handleLeft, top);
+            return;
         }
 
-        if (_handleRight is not null)
+        if (!visible)
         {
-            _handleRight.Visibility = grabbable ? Visibility.Visible : Visibility.Collapsed;
-            Canvas.SetLeft(_handleRight, to - 4);
-            Canvas.SetTop(_handleRight, top);
+            handle.Visibility = Visibility.Collapsed;
+            return;
         }
+
+        var width = hot ? 12.0 : 8.0;
+        var height = hot ? 26.0 : 16.0;
+
+        handle.Visibility = Visibility.Visible;
+        handle.Width = width;
+        handle.Height = height;
+        handle.CornerRadius = new CornerRadius(hot ? 5 : 3);
+        handle.Background = hot ? _warnBrush : _edgeBrush;
+        Canvas.SetLeft(handle, x - (width / 2));
+        Canvas.SetTop(handle, Math.Max(0, (canvasHeight - height) / 2));
     }
 
     private static Border CreateHandle() => new()
@@ -569,6 +604,7 @@ public partial class ClipEditorWindow : Window
             _edgeIsStart = edge < 0;
             _activeEdgeIsStart = _edgeIsStart;
             _edgeArmed = true;
+            _hoverEdge = edge;
             _edgeFixed = _edgeIsStart ? existing.End : existing.Start;
             TimelineCanvas.CaptureMouse();
 
@@ -624,7 +660,16 @@ public partial class ClipEditorWindow : Window
             // While playback runs the playhead belongs to the player, not to the mouse.
             if (!_isPlaying)
             {
-                TimelineCanvas.Cursor = HitTestEdge(pointer) != 0 ? Cursors.SizeWE : Cursors.Hand;
+                var edge = HitTestEdge(pointer);
+                if (edge != _hoverEdge)
+                {
+                    // Light up the end under the pointer so it is obvious what can be grabbed.
+                    _hoverEdge = edge;
+                    UpdateFocusGeometry();
+                    UpdateSelectionUi();
+                }
+
+                TimelineCanvas.Cursor = edge != 0 ? Cursors.SizeWE : Cursors.Hand;
                 UpdatePlayhead(pointer);
                 UpdateTimeText(pointer);
                 ScrubPreviewAt(pointer);
@@ -706,6 +751,7 @@ public partial class ClipEditorWindow : Window
         var wasEdgeDrag = _edgeDrag;
         _edgeDrag = false;
         _dragging = false;
+        _hoverEdge = 0;
         if (TimelineCanvas.IsMouseCaptured)
         {
             TimelineCanvas.ReleaseMouseCapture();
@@ -754,6 +800,8 @@ public partial class ClipEditorWindow : Window
         // Alt+Tab or another window stealing the capture must not leave the tool stuck
         // half-way through a drag.
         _dragging = false;
+        _edgeDrag = false;
+        _hoverEdge = 0;
         RedrawTimeline();
         UpdateSelectionUi();
     }
@@ -767,6 +815,9 @@ public partial class ClipEditorWindow : Window
 
         _pointerOverTimeline = false;
         _playerAuthoritative = false;
+        _hoverEdge = 0;
+        UpdateFocusGeometry();
+        UpdateSelectionUi();
         OnTick();
     }
 
@@ -1233,11 +1284,19 @@ public partial class ClipEditorWindow : Window
         {
             RemoveSelectionButton.IsEnabled = !_busy;
             KeepOnlyButton.IsEnabled = !_busy;
-            SelectionText.Text = Loc.F(
-                "Trim.SelectionValue",
-                MMss(selection.Start),
-                MMss(selection.End),
-                selection.Duration.ToString("0.0"));
+
+            var hot = _edgeDrag ? (_edgeIsStart ? -1 : 1) : _hoverEdge;
+            SelectionText.Text = hot switch
+            {
+                -1 => Loc.F("Trim.EdgeStart", MMss(selection.Start)),
+                1 => Loc.F("Trim.EdgeEnd", MMss(selection.End)),
+                _ => Loc.F(
+                    "Trim.SelectionValue",
+                    MMss(selection.Start),
+                    MMss(selection.End),
+                    selection.Duration.ToString("0.0"))
+            };
+
             return;
         }
 

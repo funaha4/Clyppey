@@ -188,6 +188,8 @@
     <sys:String x:Key="Trim.Invert">Invert</sys:String>
     <sys:String x:Key="Trim.KeptOnly">Keeping only {0} s (the rest is removed)</sys:String>
     <sys:String x:Key="Trim.PinnedTime">Pinned {0} / {1}</sys:String>
+    <sys:String x:Key="Trim.EdgeStart">Adjusting start {0} (←/→ = 1 frame)</sys:String>
+    <sys:String x:Key="Trim.EdgeEnd">Adjusting end {0} (←/→ = 1 frame)</sys:String>
     <sys:String x:Key="Trim.PlayFromStart">Play from the start</sys:String>
 
 </ResourceDictionary>
