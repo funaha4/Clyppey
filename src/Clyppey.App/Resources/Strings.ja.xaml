@@ -164,14 +164,11 @@
     <sys:String x:Key="Trim.PlayHint">再生 / 一時停止（スペース）</sys:String>
     <sys:String x:Key="Trim.PrevFrame">1 フレーム戻る（←）</sys:String>
     <sys:String x:Key="Trim.NextFrame">1 フレーム進む（→）</sys:String>
-    <sys:String x:Key="Trim.Hint">スペース: 再生 · ドラッグ: 範囲選択 · 右クリック: 位置を固定 · I / O: 削除区間</sys:String>
-    <sys:String x:Key="Trim.MarkStart">ここから削除（I）</sys:String>
-    <sys:String x:Key="Trim.MarkEnd">ここまで（O）</sys:String>
+    <sys:String x:Key="Trim.Hint">スペース: 再生 · ドラッグ: 範囲選択 · 右クリック: 位置を固定</sys:String>
     <sys:String x:Key="Trim.Undo">1つ戻す</sys:String>
     <sys:String x:Key="Trim.Clear">すべて戻す</sys:String>
     <sys:String x:Key="Trim.Removed">削除</sys:String>
     <sys:String x:Key="Trim.KeptValue">残り {0} 秒 / 元 {1} 秒</sys:String>
-    <sys:String x:Key="Trim.Marking">{0} から削除 — O で確定</sys:String>
     <sys:String x:Key="Trim.CutAdded">{0} 秒を削除しました（{1} 区間）</sys:String>
     <sys:String x:Key="Trim.ModeExact">ぴったり（境界のみ再エンコード）</sys:String>
     <sys:String x:Key="Trim.ModeFast">最速（無劣化・1 秒単位）</sys:String>

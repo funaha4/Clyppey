@@ -43,7 +43,6 @@ public partial class ClipEditorWindow : Window
     private Border? _handleLeft;
     private Border? _handleRight;
     private TimeRange? _selection;
-    private double? _markStart;
     private bool _dragging;
     private bool _edgeDrag;
     private bool _edgeIsStart;
@@ -414,25 +413,9 @@ public partial class ClipEditorWindow : Window
         _playhead = playhead;
     }
 
-    /// <summary>Whatever the user is currently pointing at: a dragged selection or an open mark.</summary>
-    private TimeRange? FocusRange
-    {
-        get
-        {
-            if (_selection is { } selection && selection.Duration > 0.01)
-            {
-                return selection;
-            }
-
-            if (_markStart is { } start)
-            {
-                var range = TimeRange.Normalized(start, DisplaySeconds);
-                return range.Duration > 0.01 ? range : null;
-            }
-
-            return null;
-        }
-    }
+    /// <summary>Whatever the user is currently pointing at (a dragged or adjusted range).</summary>
+    private TimeRange? FocusRange =>
+        _selection is { } selection && selection.Duration > 0.01 ? selection : null;
 
     private void UpdateFocusGeometry()
     {
@@ -1169,50 +1152,7 @@ public partial class ClipEditorWindow : Window
         OnTick();
     }
 
-    // ---------------------------------------------------------------- marking
-
-    private void MarkStart_Click(object sender, RoutedEventArgs e) => SetMarkStart();
-
-    private void MarkEnd_Click(object sender, RoutedEventArgs e) => CloseMark();
-
-    private void SetMarkStart()
-    {
-        if (_media is null || _busy)
-        {
-            return;
-        }
-
-        _markStart = DisplaySeconds;
-        StatusText.Text = Loc.F("Trim.Marking", MMss(_markStart.Value));
-        RedrawTimeline();
-    }
-
-    private void CloseMark()
-    {
-        if (_media is null || _busy)
-        {
-            return;
-        }
-
-        if (_markStart is null)
-        {
-            SetMarkStart();
-            return;
-        }
-
-        var start = Math.Min(_markStart.Value, DisplaySeconds);
-        var end = Math.Max(_markStart.Value, DisplaySeconds);
-        _markStart = null;
-
-        if (end - start >= 0.1)
-        {
-            _cuts.Add(new TimeRange(start, end));
-            StatusText.Text = Loc.F("Trim.CutAdded", (end - start).ToString("0.0"), _cuts.Count.ToString());
-        }
-
-        UpdateKeptText();
-        RedrawTimeline();
-    }
+    // ---------------------------------------------------------------- selection
 
     private void Undo_Click(object sender, RoutedEventArgs e)
     {
@@ -1236,8 +1176,8 @@ public partial class ClipEditorWindow : Window
         }
 
         _cuts.Clear();
-        _markStart = null;
         _selection = null;
+        _edgeArmed = false;
         StatusText.Text = string.Empty;
         UpdateKeptText();
         RedrawTimeline();
@@ -1440,8 +1380,6 @@ public partial class ClipEditorWindow : Window
         _busy = busy;
         ProgressBar.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         PlayButton.IsEnabled = !busy;
-        MarkStartButton.IsEnabled = !busy;
-        MarkEndButton.IsEnabled = !busy;
         ModeBox.IsEnabled = !busy;
         FileNameBox.IsEnabled = !busy;
         UpdateSelectionUi();
@@ -1492,14 +1430,6 @@ public partial class ClipEditorWindow : Window
         {
             case Key.Space:
                 TogglePlay();
-                e.Handled = true;
-                break;
-            case Key.I:
-                SetMarkStart();
-                e.Handled = true;
-                break;
-            case Key.O:
-                CloseMark();
                 e.Handled = true;
                 break;
             case Key.Left:

@@ -107,14 +107,6 @@
 
                 <TextBlock Grid.Column="1" Text="{DynamicResource Trim.Hint}" Style="{StaticResource Caption}"
                            HorizontalAlignment="Center" VerticalAlignment="Center" />
-
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="MarkStartButton" Content="{DynamicResource Trim.MarkStart}"
-                            Style="{StaticResource BaseButton}" Padding="14,8" Click="MarkStart_Click" />
-                    <Button x:Name="MarkEndButton" Content="{DynamicResource Trim.MarkEnd}"
-                            Style="{StaticResource BaseButton}" Padding="14,8" Margin="6,0,0,0"
-                            Click="MarkEnd_Click" />
-                </StackPanel>
             </Grid>
 
             <!-- ============================== selection actions ============================== -->

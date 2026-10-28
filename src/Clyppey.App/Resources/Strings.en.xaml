@@ -164,14 +164,11 @@
     <sys:String x:Key="Trim.PlayHint">Play / pause (Space)</sys:String>
     <sys:String x:Key="Trim.PrevFrame">Back one frame (←)</sys:String>
     <sys:String x:Key="Trim.NextFrame">Forward one frame (→)</sys:String>
-    <sys:String x:Key="Trim.Hint">Space: play · drag: select a range · right-click: pin the playhead · I / O: remove a range</sys:String>
-    <sys:String x:Key="Trim.MarkStart">Remove from here (I)</sys:String>
-    <sys:String x:Key="Trim.MarkEnd">To here (O)</sys:String>
+    <sys:String x:Key="Trim.Hint">Space: play · drag: select a range · right-click: pin the playhead</sys:String>
     <sys:String x:Key="Trim.Undo">Undo last</sys:String>
     <sys:String x:Key="Trim.Clear">Clear all</sys:String>
     <sys:String x:Key="Trim.Removed">Removed</sys:String>
     <sys:String x:Key="Trim.KeptValue">{0} s left / {1} s original</sys:String>
-    <sys:String x:Key="Trim.Marking">Removing from {0} — press O to set the end</sys:String>
     <sys:String x:Key="Trim.CutAdded">Removed {0} s ({1} ranges)</sys:String>
     <sys:String x:Key="Trim.ModeExact">Exact (re-encode at cuts only)</sys:String>
     <sys:String x:Key="Trim.ModeFast">Fastest (no re-encode, 1 s steps)</sys:String>
