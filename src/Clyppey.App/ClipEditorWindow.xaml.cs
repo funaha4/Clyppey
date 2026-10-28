@@ -36,11 +36,15 @@ public partial class ClipEditorWindow : Window
     private MediaInfo? _media;
     private IReadOnlyList<double> _keyframes = Array.Empty<double>();
     private Border? _playhead;
-    private Border? _focusVisual;
+    private Border? _focusFill;
+    private Border? _focusLeft;
+    private Border? _focusRight;
     private TimeRange? _selection;
     private double? _markStart;
     private bool _dragging;
     private double _dragAnchor;
+    private DateTime _lastHoverSeekUtc = DateTime.MinValue;
+    private double _lastHoverSeconds = -1;
     private bool _isPlaying;
     private bool _busy;
     private bool _mediaReady;
@@ -227,7 +231,9 @@ public partial class ClipEditorWindow : Window
 
         TimelineCanvas.Children.Clear();
         _playhead = null;
-        _focusVisual = null;
+        _focusFill = null;
+        _focusLeft = null;
+        _focusRight = null;
 
         var duration = _media.Duration;
 
@@ -274,20 +280,38 @@ public partial class ClipEditorWindow : Window
             TimelineCanvas.Children.Add(box);
         }
 
-        // The band the user is pointing at: a dragged selection, or the range being marked.
-        // An outline plus a light tint, unlike the removed bands: the user still needs to see
-        // what is inside a selection, because it is what will be kept.
-        var focus = new Border
+        // The band the user is pointing at: a light fill plus two crisp edge strips.
+        //
+        // The edges are separate 2 px Borders rather than one Border with BorderThickness:
+        // a border 4 px thick on a band a few pixels wide paints outside the band, which left
+        // ghost lines behind while a new selection was being dragged.
+        var focusFill = new Border
+        {
+            Height = height,
+            Background = new SolidColorBrush(Color.FromArgb(0x30, 0x2D, 0xD4, 0xBF)),
+            Visibility = Visibility.Collapsed
+        };
+        var focusLeft = new Border
         {
             Width = 2,
             Height = height,
-            Background = new SolidColorBrush(Color.FromArgb(0x38, 0x2D, 0xD4, 0xBF)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x5E, 0xEA, 0xD8)),
-            BorderThickness = new Thickness(2, 1, 2, 1),
+            Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x5E, 0xEA, 0xD8)),
             Visibility = Visibility.Collapsed
         };
-        TimelineCanvas.Children.Add(focus);
-        _focusVisual = focus;
+        var focusRight = new Border
+        {
+            Width = 2,
+            Height = height,
+            Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x5E, 0xEA, 0xD8)),
+            Visibility = Visibility.Collapsed
+        };
+
+        TimelineCanvas.Children.Add(focusFill);
+        TimelineCanvas.Children.Add(focusLeft);
+        TimelineCanvas.Children.Add(focusRight);
+        _focusFill = focusFill;
+        _focusLeft = focusLeft;
+        _focusRight = focusRight;
         UpdateFocusGeometry();
 
         var playhead = new Border
@@ -323,7 +347,7 @@ public partial class ClipEditorWindow : Window
 
     private void UpdateFocusGeometry()
     {
-        if (_media is null || _focusVisual is null)
+        if (_media is null || _focusFill is null || _focusLeft is null || _focusRight is null)
         {
             return;
         }
@@ -334,15 +358,36 @@ public partial class ClipEditorWindow : Window
             return;
         }
 
-        if (FocusRange is not { } range)
+        var range = FocusRange;
+        if (range is not { } band)
         {
-            _focusVisual.Visibility = Visibility.Collapsed;
+            _focusFill.Visibility = Visibility.Collapsed;
+            _focusLeft.Visibility = Visibility.Collapsed;
+            _focusRight.Visibility = Visibility.Collapsed;
             return;
         }
 
-        _focusVisual.Visibility = Visibility.Visible;
-        Canvas.SetLeft(_focusVisual, range.Start / _media.Duration * width);
-        _focusVisual.Width = Math.Max(2, range.Duration / _media.Duration * width);
+        var from = band.Start / _media.Duration * width;
+        var to = band.End / _media.Duration * width;
+        var pixels = Math.Max(1, to - from);
+
+        _focusFill.Visibility = Visibility.Visible;
+        _focusFill.Width = pixels;
+        Canvas.SetLeft(_focusFill, from);
+
+        _focusLeft.Visibility = Visibility.Visible;
+        Canvas.SetLeft(_focusLeft, from);
+
+        // Two edges on top of each other just reads as a thicker line, so one is enough.
+        if (pixels < 6)
+        {
+            _focusRight.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            _focusRight.Visibility = Visibility.Visible;
+            Canvas.SetLeft(_focusRight, to - 2);
+        }
     }
 
     private void UpdatePlayhead(double seconds)
@@ -351,6 +396,16 @@ public partial class ClipEditorWindow : Window
         {
             return;
         }
+
+        // While dragging, the moving edge of the selection already marks the cursor. Leaving
+        // the playhead at the previous position made the old edge look like a leftover.
+        if (_dragging)
+        {
+            _playhead.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _playhead.Visibility = Visibility.Visible;
 
         var width = TimelineCanvas.ActualWidth;
         if (width < 20)
@@ -399,19 +454,62 @@ public partial class ClipEditorWindow : Window
 
     private void Timeline_MouseMove(object sender, MouseEventArgs e)
     {
-        if (!_dragging || _media is null)
+        if (_media is null)
         {
+            return;
+        }
+
+        var pointer = SecondsAt(e.GetPosition(TimelineCanvas));
+
+        if (!_dragging)
+        {
+            // Show the frame under the cursor so a range can be picked by eye.
+            ScrubPreviewAt(pointer);
             return;
         }
 
         // Only the visuals follow the cursor while dragging; the player is seeked on release
         // because scrubbing a 350 MB clip through Media Foundation is not free.
-        var seconds = SecondsAt(e.GetPosition(TimelineCanvas));
-        _selection = TimeRange.Normalized(_dragAnchor, seconds);
+        _selection = TimeRange.Normalized(_dragAnchor, pointer);
         UpdateFocusGeometry();
         UpdateSelectionUi();
-        UpdatePlayhead(seconds);
-        TimeText.Text = $"{MMss(seconds)} / {MMss(_media.Duration)}";
+        UpdatePlayhead(pointer);
+        TimeText.Text = $"{MMss(pointer)} / {MMss(_media.Duration)}";
+    }
+
+    /// <summary>
+    /// Moves the preview to the hovered frame. Throttled: Media Foundation seeks take tens of
+    /// milliseconds, so following every mouse event would fall behind and look stuttery.
+    /// </summary>
+    private void ScrubPreviewAt(double seconds)
+    {
+        if (_media is null || _isPlaying || _busy)
+        {
+            return;
+        }
+
+        if (Math.Abs(seconds - _lastHoverSeconds) < 0.02)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        if ((now - _lastHoverSeekUtc).TotalMilliseconds < 110)
+        {
+            return;
+        }
+
+        _lastHoverSeekUtc = now;
+        _lastHoverSeconds = seconds;
+
+        try
+        {
+            Player.Position = TimeSpan.FromSeconds(Math.Clamp(seconds, 0, _media.Duration));
+        }
+        catch (Exception)
+        {
+            // Position is only settable once the media is open.
+        }
     }
 
     private void Timeline_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
