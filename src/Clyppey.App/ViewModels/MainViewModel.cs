@@ -1145,6 +1145,8 @@ public sealed class MainViewModel : ObservableObject
                 ShowToast(Loc.F("Toast.Saved", result.DurationSeconds.ToString("0.0"), (result.Bytes / 1048576.0).ToString("0.0")));
                 if (_settings.PlaySoundOnSave)
                 {
+                    // 完了音は Windows の通知音（柔らかく長い）。開始音は SaveCue の短い 2 音で、
+                    // 同じ設定 1 つで両方の鳴りを止められる。
                     System.Media.SystemSounds.Asterisk.Play();
                 }
 
@@ -1254,6 +1256,15 @@ public sealed class MainViewModel : ObservableObject
         _busy = true;
         try
         {
+            // 押した瞬間に「受け付けた」と分かる音。完了音（Windows の通知音）とは別の短い音なので、
+            // 保存が始まったのか終わったのかを耳で区別できる。バッファリング中でない押下は
+            // エンジン側が黙って捨てるので、そのときは鳴らさない（鳴ると「保存できた」と誤解する）。
+            var state = _engine.GetStats().State;
+            if (_settings.PlaySoundOnSave && state is EngineState.Buffering or EngineState.Recording)
+            {
+                SaveCue.PlayStart();
+            }
+
             var result = await _engine.SaveReplayAsync(_settings.EffectiveBufferSeconds).ConfigureAwait(true);
             if (result is { Success: false })
             {
