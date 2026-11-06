@@ -41,7 +41,8 @@ public static class TrimPlanBuilder
 {
     private static readonly string[] Common =
     {
-        "-y", "-hide_banner", "-nostats", "-progress", "pipe:1", "-v", "error"
+        // -nostdin: the CLI selftest inherits a console; a stray "q" must not abort the run.
+        "-y", "-hide_banner", "-nostats", "-nostdin", "-progress", "pipe:1", "-v", "error"
     };
 
     public static TrimPlan Build(TrimContext context)
@@ -70,6 +71,11 @@ public static class TrimPlanBuilder
                 if (start > keep.Start)
                 {
                     start = keep.Start;
+                }
+
+                if (hasIndex && keep.Start - start > 0.05)
+                {
+                    warning ??= "開始位置がキーコードに合うよう少し前に広げられました";
                 }
 
                 steps.Add(new TrimStep(output, CopyArgs(context, start, keep.End - start, output), keep.End - start));

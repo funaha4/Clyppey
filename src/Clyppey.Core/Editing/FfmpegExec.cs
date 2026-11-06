@@ -49,14 +49,19 @@ internal static class FfmpegExec
             // Priority is a hint; some sandboxes refuse it.
         }
 
-        var stderr = new StringBuilder();
+        var stderr = new LinkedList<string>();
+        var stderrChars = 0;
         var stdout = new StringBuilder();
 
         var errTask = ReadLinesAsync(process.StandardError, cancellationToken, line =>
         {
-            if (stderr.Length < MaxCaptureChars)
+            // Keep the tail: ffmpeg prints the real error at the end, not the header.
+            stderr.AddLast(line);
+            stderrChars += line.Length + 1;
+            while (stderrChars > MaxCaptureChars && stderr.First is not null)
             {
-                stderr.AppendLine(line);
+                stderrChars -= stderr.First.Value.Length + 1;
+                stderr.RemoveFirst();
             }
         });
         var outTask = ReadLinesAsync(process.StandardOutput, cancellationToken, line =>
@@ -88,7 +93,7 @@ internal static class FfmpegExec
             throw;
         }
 
-        return (process.ExitCode, stdout.ToString(), stderr.ToString().Trim());
+        return (process.ExitCode, stdout.ToString(), string.Join(Environment.NewLine, stderr).Trim());
     }
 
     private static async Task ReadLinesAsync(

@@ -147,6 +147,7 @@ public sealed class AppSettings
         (BufferOnDisk ? 0 : VideoMegabytes) + AudioMegabytes;
 
     /// <summary>Encoded video held in RAM.</summary>
+    [JsonIgnore]
     public double VideoMegabytes =>
         EffectiveBitrateMbps * 1_000_000.0 / 8.0 * EffectiveBufferSeconds / (1024 * 1024) * 1.06;
 
@@ -154,6 +155,7 @@ public sealed class AppSettings
     /// PCM held in RAM. 48 kHz stereo 16-bit per enabled source; the estimate used to ignore this,
     /// which is why the app looked lighter than it actually was.
     /// </summary>
+    [JsonIgnore]
     public double AudioMegabytes
     {
         get
@@ -166,6 +168,7 @@ public sealed class AppSettings
 
 public static class SettingsStore
 {
+    private static readonly object Gate = new();
     private static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
@@ -186,6 +189,20 @@ public static class SettingsStore
                 }
             }
         }
+        catch (JsonException ex)
+        {
+            // One bad write must not wipe all settings: keep the broken file for forensics.
+            try
+            {
+                var backup = AppPaths.SettingsFile + $".bad.{DateTime.Now:yyyyMMdd-HHmmss}";
+                File.Move(AppPaths.SettingsFile, backup, overwrite: false);
+                Log.Warn($"設定ファイルが壊れていたため退避しました ({Path.GetFileName(backup)}): {ex.Message}");
+            }
+            catch (Exception moveEx)
+            {
+                Log.Warn($"設定の読み込みに失敗したため既定値を使います: {ex.Message} (退避も失敗: {moveEx.Message})");
+            }
+        }
         catch (Exception ex)
         {
             Log.Warn($"設定の読み込みに失敗したため既定値を使います: {ex.Message}");
@@ -196,17 +213,21 @@ public static class SettingsStore
 
     public static void Save(AppSettings settings)
     {
-        try
+        var json = JsonSerializer.Serialize(settings, Options);
+        lock (Gate)
         {
-            AppPaths.EnsureDirectories();
-            var json = JsonSerializer.Serialize(settings, Options);
-            var temp = AppPaths.SettingsFile + ".tmp";
-            File.WriteAllText(temp, json);
-            File.Move(temp, AppPaths.SettingsFile, overwrite: true);
-        }
-        catch (Exception ex)
-        {
-            Log.Error("設定の保存に失敗しました", ex);
+            try
+            {
+                AppPaths.EnsureDirectories();
+                // Unique temp name: the 0.5 s auto-save and manual saves share this file.
+                var temp = AppPaths.SettingsFile + $".{Guid.NewGuid():N}.tmp";
+                File.WriteAllText(temp, json);
+                File.Move(temp, AppPaths.SettingsFile, overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("設定の保存に失敗しました", ex);
+            }
         }
     }
 }

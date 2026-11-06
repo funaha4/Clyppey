@@ -1783,7 +1783,8 @@ public partial class ClipEditorWindow : Window
             return;
         }
 
-        if (selection.Duration >= 0.1)
+        // Same floor as edge/arrow drags: at high zoom a 1-frame selection is valid.
+        if (selection.Duration >= MinRangeSeconds())
         {
             _cuts.Add(selection);
             StatusText.Text = Loc.F("Trim.CutAdded", selection.Duration.ToString("0.0"), _cuts.Count.ToString());
@@ -1891,6 +1892,18 @@ public partial class ClipEditorWindow : Window
         }
 
         var name = FileNameBox.Text.Trim();
+        if (name.Length == 0)
+        {
+            name = Path.GetFileNameWithoutExtension(_clip.FileName) + "_cut.mp4";
+        }
+
+        // Never let the text box escape the clip folder ("..\" or "sub\name").
+        name = Path.GetFileName(name);
+        foreach (var bad in Path.GetInvalidFileNameChars())
+        {
+            name = name.Replace(bad, '_');
+        }
+
         if (name.Length == 0)
         {
             name = Path.GetFileNameWithoutExtension(_clip.FileName) + "_cut.mp4";

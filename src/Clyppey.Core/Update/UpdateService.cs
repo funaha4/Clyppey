@@ -56,6 +56,9 @@ public static class UpdateService
         long size = 0;
         if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
         {
+            // Prefer the documented -win-x64.zip (AGENTS.md §13); fall back to the first zip.
+            string? fallbackUrl = null;
+            long fallbackSize = 0;
             foreach (var asset in assets.EnumerateArray())
             {
                 var name = asset.TryGetProperty("name", out var n) ? n.GetString() ?? string.Empty : string.Empty;
@@ -64,9 +67,31 @@ public static class UpdateService
                     continue;
                 }
 
-                url = asset.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
-                size = asset.TryGetProperty("size", out var s) && s.TryGetInt64(out var bytes) ? bytes : 0;
-                break;
+                var candidateUrl = asset.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
+                var candidateSize = asset.TryGetProperty("size", out var s) && s.TryGetInt64(out var bytes) ? bytes : 0;
+                if (string.IsNullOrWhiteSpace(candidateUrl))
+                {
+                    continue;
+                }
+
+                if (fallbackUrl is null)
+                {
+                    fallbackUrl = candidateUrl;
+                    fallbackSize = candidateSize;
+                }
+
+                if (name.EndsWith("-win-x64.zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    url = candidateUrl;
+                    size = candidateSize;
+                    break;
+                }
+            }
+
+            url ??= fallbackUrl;
+            if (fallbackUrl is not null && url == fallbackUrl)
+            {
+                size = fallbackSize;
             }
         }
 
@@ -90,6 +115,8 @@ public static class UpdateService
         Directory.CreateDirectory(directory);
         var target = Path.Combine(directory, "Clyppey.zip");
 
+        try
+        {
         using var response = await Http
             .GetAsync(update.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
@@ -114,6 +141,13 @@ public static class UpdateService
         }
 
         return target;
+        }
+        catch (Exception)
+        {
+            // Never leave a truncated zip behind: Extract would fail on it next launch.
+            try { if (File.Exists(target)) File.Delete(target); } catch { /* best effort */ }
+            throw;
+        }
     }
 
     /// <summary>Extracts the package and returns the folder that holds the new executable.</summary>
@@ -181,7 +215,7 @@ public static class UpdateService
 
     private static Version Parse(string text)
     {
-        var cleaned = new string(text.TakeWhile(c => char.IsDigit(c) || c == '.').ToArray());
+        var cleaned = new string(text.TakeWhile(c => char.IsDigit(c) || c == '.').ToArray()).Trim('.');
         return Version.TryParse(cleaned, out var version) ? version : new Version(0, 0);
     }
 }

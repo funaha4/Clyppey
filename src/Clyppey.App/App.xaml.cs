@@ -67,10 +67,9 @@ public partial class App : Application
         var settings = SettingsStore.Load();
         Loc.Initialize(settings.Language);
 
-        if (e.Args.Any(a => string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase)))
-        {
-            settings.StartMinimized = true;
-        }
+        // Dev/launch flag only: never persist it, or one screenshot run flips the user setting.
+        var startMinimized = settings.StartMinimized
+            || e.Args.Any(a => string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
 
         Log.Info($"起動: {AppPaths.AppDataRoot} (fallback={AppPaths.IsFallbackRoot}) lang={Loc.Current}");
 
@@ -151,7 +150,7 @@ public partial class App : Application
             return;
         }
 
-        if (!settings.StartMinimized)
+        if (!startMinimized)
         {
             ShowWindow();
         }

@@ -31,10 +31,12 @@ public static class Log
         {
             AppPaths.EnsureDirectories();
             RotateIfNeeded();
+            var isNew = !File.Exists(AppPaths.LogFile);
             _writer = new StreamWriter(new FileStream(
                 AppPaths.LogFile, FileMode.Append, FileAccess.Write, FileShare.ReadWrite),
                 // BOM so Windows tools that guess ANSI still render Japanese correctly.
-                new UTF8Encoding(encoderShouldEmitUTF8Identifier: true)) { AutoFlush = true };
+                // Emit it only for a fresh file: appending it mid-file litters stray bytes.
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: isNew)) { AutoFlush = true };
         }
         catch (Exception)
         {
@@ -54,7 +56,7 @@ public static class Log
     public static void Error(string message) => Write(LogLevel.Error, message);
 
     public static void Error(string message, Exception ex) =>
-        Write(LogLevel.Error, $"{message}: {ex.GetType().Name}: {ex.Message}");
+        Write(LogLevel.Error, $"{message}: {ex}");
 
     public static IReadOnlyList<LogEntry> Snapshot()
     {
@@ -77,6 +79,9 @@ public static class Log
 
             try
             {
+                // First open may have failed (locked folder, AV); retry so logging
+                // is not dead for the whole session exactly when diagnostics matter.
+                _writer ??= TryOpenWriter();
                 _writer?.WriteLine($"{entry.Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{level,-5}] {message}");
             }
             catch (Exception)
@@ -103,6 +108,22 @@ public static class Log
             var backup = AppPaths.LogFile + ".1";
             File.Delete(backup);
             File.Move(AppPaths.LogFile, backup);
+        }
+    }
+
+    private static StreamWriter? TryOpenWriter()
+    {
+        try
+        {
+            AppPaths.EnsureDirectories();
+            var isNew = !File.Exists(AppPaths.LogFile);
+            return new StreamWriter(new FileStream(
+                AppPaths.LogFile, FileMode.Append, FileAccess.Write, FileShare.ReadWrite),
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: isNew)) { AutoFlush = true };
+        }
+        catch (Exception)
+        {
+            return null;
         }
     }
 }

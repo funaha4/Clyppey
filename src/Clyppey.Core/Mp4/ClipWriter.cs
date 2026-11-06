@@ -58,8 +58,8 @@ public static class ClipWriter
 
         try
         {
-            // Saving must never compete with the game for CPU or disk.
-            process.PriorityClass = ProcessPriorityClass.Idle;
+            // Saving must never compete with the game for CPU or disk (AGENTS.md §2 #5).
+            process.PriorityClass = ProcessPriorityClass.BelowNormal;
         }
         catch (Exception ex)
         {

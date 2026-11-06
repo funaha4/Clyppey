@@ -193,7 +193,9 @@ public static class TrimJob
             }
 
             var junctions = Math.Max(0, plan.Steps.Count - 1);
-            if (verify && frames > 0 && Math.Abs(frames - expectedFrames) > junctions + 3)
+            // Each step contributes ±1 frame rounding plus ~1 frame per join growth.
+            var tolerance = Math.Max(junctions + 3, plan.Steps.Count + 3);
+            if (verify && frames > 0 && Math.Abs(frames - expectedFrames) > tolerance)
             {
                 warnings.Add($"フレーム数が合いません: {frames} フレーム（期待 {expectedFrames}）");
             }

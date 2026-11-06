@@ -99,7 +99,6 @@ public sealed class ClipLibrary
     {
         try
         {
-            AppPaths.EnsureDirectories();
             ClipEntry[] snapshot;
             lock (_gate)
             {
@@ -107,7 +106,11 @@ public sealed class ClipLibrary
             }
 
             var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(AppPaths.ClipLibraryFile, json);
+            AppPaths.EnsureDirectories();
+            // Atomic like SettingsStore: a crash mid-write must not tear clips.json.
+            var temp = AppPaths.ClipLibraryFile + $".{Guid.NewGuid():N}.tmp";
+            File.WriteAllText(temp, json);
+            File.Move(temp, AppPaths.ClipLibraryFile, overwrite: true);
         }
         catch (Exception ex)
         {

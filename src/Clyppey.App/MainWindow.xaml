@@ -499,7 +499,7 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox Text="{Binding OutputDirectoryEdit, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBox Text="{Binding OutputDirectoryEdit, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
                                         <Button Grid.Column="1" Content="{DynamicResource Settings.Browse}" Margin="8,0,0,0"
                                                 Style="{StaticResource BaseButton}" Click="BrowseFolder_Click" />
                                     </Grid>

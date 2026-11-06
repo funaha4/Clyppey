@@ -67,13 +67,21 @@ public sealed record HotkeyGesture(uint Modifiers, uint VirtualKey, string Norma
             return false;
         }
 
-        if (modifiers == 0)
+        // Bare function keys are safe from accidental typing; anything else needs a modifier.
+        var isFunctionKey = key is >= Key.F1 and <= Key.F24;
+        if (modifiers == 0 && !isFunctionKey)
         {
-            error = "Alt / Ctrl / Shift / Win のいずれかを組み合わせてください";
+            error = "Alt / Ctrl / Shift / Win のいずれかを組み合わせてください (F1–F24 は単体可)";
             return false;
         }
 
         var vk = (uint)KeyInterop.VirtualKeyFromKey(key);
+        if (vk == 0)
+        {
+            error = $"キー '{key}' はグローバルホットキーに使えません";
+            return false;
+        }
+
         gesture = new HotkeyGesture(modifiers, vk, Normalize(modifiers, key));
         return true;
     }
