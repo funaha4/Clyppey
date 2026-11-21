@@ -125,7 +125,7 @@ public static class TrimJob
 
             var concatArgs = new List<string>
             {
-                "-y", "-hide_banner", "-nostats", "-v", "error",
+                "-y", "-nostdin", "-hide_banner", "-nostats", "-v", "error",
                 "-f", "concat", "-safe", "0", "-i", plan.ConcatListPath,
                 "-map", "0:v:0"
             };
@@ -173,7 +173,7 @@ public static class TrimJob
                     ffmpegPath,
                     new[]
                     {
-                        "-hide_banner", "-nostats", "-progress", "pipe:1", "-v", "error",
+                        "-nostdin", "-hide_banner", "-nostats", "-progress", "pipe:1", "-v", "error",
                         "-i", context.OutputPath, "-map", "0:v:0", "-f", "null", "-"
                     },
                     line =>
@@ -260,13 +260,18 @@ public static class TrimJob
             : null;
     }
 
-    private static string ToPosix(string path) => path.Replace('\\', '/').Replace("'", "\\'");
+    // ffmpeg concat demuxer quoting: wrap in single quotes, escape each embedded '
+    // as '\'' (close, escaped quote, reopen). Backslash-escaping does NOT work.
+    private static string ToPosix(string path) =>
+        path.Replace('\\', '/').Replace("'", "'\\''");
 
     private static string FirstLines(string text, int count)
     {
+        // ffmpeg prints the real error at the end, not the header,
+        // so keep the tail (v4.0 intention: show why it failed).
         var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         var take = Math.Min(count, lines.Length);
-        return string.Join(" / ", lines.Take(take).Select(l => l.Trim()));
+        return string.Join(" / ", lines.TakeLast(take).Select(l => l.Trim()));
     }
 
     private static void TryDeleteDirectory(string path)

@@ -70,29 +70,35 @@ public static class ClipWriter
         var stdin = process.StandardInput.BaseStream;
         string? writeError = null;
 
+        // A hung disk or ffmpeg must not hold _busy forever: cap the whole save.
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, timeoutCts.Token);
+        var linkedToken = linkedCts.Token;
+
         try
         {
-            await stdin.WriteAsync(snapshot.InitSegment, cancellationToken).ConfigureAwait(false);
+            await stdin.WriteAsync(snapshot.InitSegment, linkedToken).ConfigureAwait(false);
             foreach (var fragment in snapshot.Fragments)
             {
                 if (fragment.FilePath is not null)
                 {
                     using var source = new FileStream(fragment.FilePath, FileMode.Open, FileAccess.Read,
                         FileShare.ReadWrite, 1 << 20, FileOptions.SequentialScan);
-                    await source.CopyToAsync(stdin, 1 << 20, cancellationToken).ConfigureAwait(false);
+                    await source.CopyToAsync(stdin, 1 << 20, linkedToken).ConfigureAwait(false);
                 }
                 else
                 {
-                    await stdin.WriteAsync(fragment.Data, cancellationToken).ConfigureAwait(false);
+                    await stdin.WriteAsync(fragment.Data, linkedToken).ConfigureAwait(false);
                 }
             }
 
-            await stdin.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await stdin.FlushAsync(linkedToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException)
         {
-            // ffmpeg exited early; the real reason will be on stderr.
-            writeError = ex.Message;
+            // ffmpeg exited early / timed out; the real reason will be on stderr.
+            writeError = timeoutCts.IsCancellationRequested ? "保存がタイムアウトしました (30秒)" : ex.Message;
         }
 
         try
@@ -104,7 +110,21 @@ public static class ClipWriter
             // Already closed.
         }
 
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await process.WaitForExitAsync(linkedToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            try { process.Kill(entireProcessTree: true); } catch (Exception) { }
+            writeError ??= "保存がタイムアウトしました (30秒)";
+        }
+
+        if (!process.HasExited)
+        {
+            try { process.Kill(entireProcessTree: true); } catch (Exception) { }
+            writeError ??= "保存がタイムアウトしました (30秒)";
+        }
 
         var stderr = string.Empty;
         try
@@ -116,9 +136,12 @@ public static class ClipWriter
             // Ignore.
         }
 
-        if (process.ExitCode != 0 || !File.Exists(outputPath))
+        if (process.ExitCode != 0 || !File.Exists(outputPath) || writeError is not null)
         {
-            var reason = stderr.Length > 0 ? stderr : (writeError ?? "原因不明のエラー");
+            var reason = writeError ?? (stderr.Length > 0 ? stderr : "原因不明のエラー");
+            // Never leave a half-written clip behind: the next save would pick a _1 name
+            // and the broken file would look like a real result.
+            try { if (File.Exists(outputPath)) File.Delete(outputPath); } catch { /* best effort */ }
             return new ClipWriteResult(false, outputPath, 0, 0, Truncate(reason));
         }
 

@@ -95,6 +95,7 @@ public sealed class ReplayEngine : IDisposable
     private double _epochOffset;
     private double _lastFragmentArrival;
     private bool _preserveBuffer;
+    private int _reconnectRunning;
 
     private PerfSampler? _perf;
     private CaptureSink? _sink;
@@ -557,43 +558,58 @@ public sealed class ReplayEngine : IDisposable
 
         _sink = null;
 
+        lock (_gate)
+        {
+            if (!_preserveBuffer)
+            {
+                _ring.Evicted -= OnFragmentEvicted;
+                _ring.Clear();
+                _store?.Dispose();
+                _store = null;
+            }
+        }
+
+        // Reconnects must not drop audio: the loopback/mic streams are independent of the
+        // video ffmpeg process, so keep them running and let the wall-clock-anchored window
+        // cover the gap. Only a real stop tears them down.
         if (!_preserveBuffer)
         {
-            _ring.Evicted -= OnFragmentEvicted;
-            _ring.Clear();
-            _store?.Dispose();
-            _store = null;
+            try
+            {
+                _desktopAudio.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"デスクトップ音声の終了処理: {ex.Message}");
+            }
+
+            try
+            {
+                _microphone.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"マイクの終了処理: {ex.Message}");
+            }
         }
 
-        try
+        // Manual recording owns its file; a video-pipeline reconnect must not close it.
+        // (Full record-continuation across reconnects is future work — for now the recorder
+        // keeps the handle so the file is not truncated to zero.)
+        if (!_preserveBuffer)
         {
-            _desktopAudio.Dispose();
-        }
-        catch (Exception ex)
-        {
-            Log.Debug($"デスクトップ音声の終了処理: {ex.Message}");
-        }
+            try
+            {
+                _recordStream?.Flush();
+                _recordStream?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug($"録画ファイルのクローズ: {ex.Message}");
+            }
 
-        try
-        {
-            _microphone.Dispose();
+            _recordStream = null;
         }
-        catch (Exception ex)
-        {
-            Log.Debug($"マイクの終了処理: {ex.Message}");
-        }
-
-        try
-        {
-            _recordStream?.Flush();
-            _recordStream?.Dispose();
-        }
-        catch (Exception ex)
-        {
-            Log.Debug($"録画ファイルのクローズ: {ex.Message}");
-        }
-
-        _recordStream = null;
     }
 
     private void StartWatcher(CaptureSession session)
@@ -701,7 +717,16 @@ public sealed class ReplayEngine : IDisposable
     /// </summary>
     private async Task RestartCaptureAsync(int exitCode)
     {
-        _restartAttempts++;
+        // Single-flight: watcher + manual reconnect can fire together.
+        if (System.Threading.Interlocked.CompareExchange(ref _reconnectRunning, 1, 0) != 0)
+        {
+            Log.Debug("再接続は既に実行中です");
+            return;
+        }
+
+        try
+        {
+            _restartAttempts++;
 
         // While the desktop cannot be duplicated (locked screen, exclusive game) back off instead
         // of respawning ffmpeg every second.
@@ -762,6 +787,13 @@ public sealed class ReplayEngine : IDisposable
                     Log.Warn($"再接続に失敗しました (試行 {attempt}): {ex.Message}");
                 }
             }
+        }
+
+        }
+        finally
+        {
+            _restartAttempts = 0;
+            System.Threading.Interlocked.Exchange(ref _reconnectRunning, 0);
         }
 
     }

@@ -17,11 +17,12 @@ public sealed record UpdateInfo(string Version, string DownloadUrl, long SizeByt
 /// </summary>
 public static class UpdateService
 {
-    private static readonly HttpClient Http = CreateHttpClient();
+    private static readonly HttpClient Http = CreateHttpClient(TimeSpan.FromSeconds(20));
+    private static readonly HttpClient DownloadHttp = CreateHttpClient(Timeout.InfiniteTimeSpan);
 
-    private static HttpClient CreateHttpClient()
+    private static HttpClient CreateHttpClient(TimeSpan timeout)
     {
-        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        var client = new HttpClient { Timeout = timeout };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Clyppey-Updater");
         client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return client;
@@ -111,13 +112,17 @@ public static class UpdateService
         IProgress<double>? progress,
         CancellationToken cancellationToken)
     {
-        var directory = Path.Combine(AppPaths.AppDataRoot, "update", update.Version);
+        // NOTE: HttpClient.Timeout covers the whole request (headers + body), so the 20 s
+        // check client must not be reused here: a 90 MB zip needs minutes on slow links.
+        // DownloadHttp has no timeout; the caller's CancellationToken still aborts it.
+        var safeVersion = SanitizeVersion(update.Version);
+        var directory = Path.Combine(AppPaths.AppDataRoot, "update", safeVersion);
         Directory.CreateDirectory(directory);
         var target = Path.Combine(directory, "Clyppey.zip");
 
         try
         {
-        using var response = await Http
+        using var response = await DownloadHttp
             .GetAsync(update.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
@@ -159,13 +164,31 @@ public static class UpdateService
             Directory.Delete(directory, recursive: true);
         }
 
-        ZipFile.ExtractToDirectory(zipPath, directory);
+        try
+        {
+            ZipFile.ExtractToDirectory(zipPath, directory);
 
-        // The archive keeps everything under one top-level folder.
-        var inner = Directory.GetDirectories(directory);
-        return inner.Length == 1 && File.Exists(Path.Combine(inner[0], "Clyppey.exe"))
-            ? inner[0]
-            : directory;
+            // The archive keeps everything under one top-level folder.
+            var inner = Directory.GetDirectories(directory);
+            var candidate = inner.Length == 1 && File.Exists(Path.Combine(inner[0], "Clyppey.exe"))
+                ? inner[0]
+                : directory;
+
+            if (!File.Exists(Path.Combine(candidate, "Clyppey.exe")))
+            {
+                throw new InvalidOperationException("更新zipに Clyppey.exe がありません");
+            }
+
+            return candidate;
+        }
+        catch (Exception)
+        {
+            // Never leave a half-extracted tree: the next launch would pick it up as success.
+            try { if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true); }
+            catch { /* best effort */ }
+
+            throw;
+        }
     }
 
     /// <summary>
@@ -173,6 +196,19 @@ public static class UpdateService
     /// </summary>
     public static void StartSwap(string sourceDirectory, string installDirectory, int processId)
     {
+        if (string.IsNullOrWhiteSpace(sourceDirectory) || string.IsNullOrWhiteSpace(installDirectory))
+        {
+            throw new ArgumentException("更新フォルダが空です");
+        }
+
+        foreach (var c in new[] { '"', '\r', '\n', '%', '&', '|', '<', '>' })
+        {
+            if (sourceDirectory.Contains(c) || installDirectory.Contains(c))
+            {
+                throw new ArgumentException("更新パスに使えない文字があります");
+            }
+        }
+
         var scriptPath = Path.Combine(Path.GetDirectoryName(sourceDirectory)!, "apply-update.cmd");
         var staging = Path.GetDirectoryName(Path.GetDirectoryName(sourceDirectory))!;
 
@@ -188,6 +224,9 @@ public static class UpdateService
               goto wait
             )
             robocopy "%SRC%" "%DST%" /E /NFL /NDL /NJH /NJS /R:3 /W:1 >nul
+            if errorlevel 8 (
+              exit /b 1
+            )
             start "" "%DST%\Clyppey.exe"
             timeout /t 2 /nobreak >nul
             rmdir /s /q "{staging}" >nul 2>&1
@@ -211,6 +250,20 @@ public static class UpdateService
         var left = Parse(candidate);
         var right = Parse(current);
         return left.CompareTo(right) > 0;
+    }
+
+    /// <summary>Version text safe for paths and scripts (digits, letters, dot, dash, underscore).</summary>
+    internal static string SanitizeVersion(string version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return "unknown";
+        }
+
+        var cleaned = new string(version.Trim().Select(c =>
+            char.IsLetterOrDigit(c) || c == '.' || c == '-' || c == '_' ? c : '_').ToArray());
+        cleaned = cleaned.Trim('.', '-', '_');
+        return string.IsNullOrEmpty(cleaned) ? "unknown" : cleaned[..Math.Min(cleaned.Length, 64)];
     }
 
     private static Version Parse(string text)

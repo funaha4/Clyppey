@@ -37,7 +37,11 @@ internal static class Program
                 "record" => await RecordAsync(options).ConfigureAwait(false),
                 "trim" => await TrimAsync(args.Skip(1).ToArray()).ConfigureAwait(false),
                 "selftest" => await SelfTestAsync(options).ConfigureAwait(false),
-                _ => Help()
+                "help" => Help(),
+                "--help" => Help(),
+                "-h" => Help(),
+                "-help" => Help(),
+                _ => HelpError(command)
             };
         }
         catch (Exception ex)
@@ -86,9 +90,20 @@ internal static class Program
                         return 2;
                     }
 
-                    mode = argv[++i].Equals("fast", StringComparison.OrdinalIgnoreCase)
-                        ? CutMode.Fast
-                        : CutMode.Exact;
+                    var modeText = argv[++i];
+                    if (modeText.Equals("fast", StringComparison.OrdinalIgnoreCase))
+                    {
+                        mode = CutMode.Fast;
+                    }
+                    else if (modeText.Equals("exact", StringComparison.OrdinalIgnoreCase))
+                    {
+                        mode = CutMode.Exact;
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine($"--mode には exact か fast を指定します: {modeText}");
+                        return 2;
+                    }
                     break;
                 }
 
@@ -115,7 +130,13 @@ internal static class Program
                         return 2;
                     }
 
-                    source ??= arg;
+                    if (source is not null)
+                    {
+                        Console.Error.WriteLine($"入力は1つだけ指定します: {arg}");
+                        return 2;
+                    }
+
+                    source = arg;
                     break;
             }
         }
@@ -123,6 +144,12 @@ internal static class Program
         if (source is null || !File.Exists(source))
         {
             Console.Error.WriteLine("使い方: clyppey trim <clip.mp4> --remove 12.4-18.0 [--remove ...] [--mode exact|fast] [--out-file out.mp4]");
+            return 2;
+        }
+
+        if (removes.Count > 0 && keeps.Count > 0)
+        {
+            Console.Error.WriteLine("--remove と --keep は同時に指定できません。どちらか一方にしてください。");
             return 2;
         }
 
@@ -267,6 +294,7 @@ internal static class Program
 
             使い方:
               clyppey probe                     環境とエンコーダを調査
+              clyppey paths                     パスと書き込み確認（--write-test 付きのみログに書く）
               clyppey monitors [--out <dir>]    モニターごとのプレビュー画像を保存
               clyppey bench  [--seconds 20]     バッファリングの負荷を計測
               clyppey save   [--seconds 30] [--out <file>]   指定秒数を保存
@@ -280,8 +308,18 @@ internal static class Program
               --fps       フレームレート (default 60)
               --bitrate   ビットレート Mbps (default 25)
               --no-audio  音声を無効化
+
+            終了コード: 0 成功 / 1 検証失敗・デコード警告 / 2 引数エラー・例外
+            ※ --screenshot/--editor-* はアプリ専用（CLIでは使えません）
             """);
         return 0;
+    }
+
+    private static int HelpError(string command)
+    {
+        Console.Error.WriteLine($"不明なコマンド: {command}");
+        Help();
+        return 2;
     }
 
     // ---------------------------------------------------------------- probe
@@ -302,12 +340,12 @@ internal static class Program
         {
             AppPaths.EnsureDirectories();
             Console.WriteLine($"EnsureDirectories: OK (exists={Directory.Exists(AppPaths.AppDataRoot)})");
-            File.AppendAllText(AppPaths.LogFile, "diagnostic write\n");
-            Console.WriteLine($"log write  : OK ({new FileInfo(AppPaths.LogFile).Length} bytes)");
+            // NOTE: no log write here — `paths` must stay read-only (no log pollution).
         }
         catch (Exception ex)
         {
             Console.WriteLine($"EnsureDirectories: FAILED {ex.GetType().Name}: {ex.Message}");
+            return 1;
         }
 
         return 0;
@@ -719,26 +757,9 @@ internal static class Program
             var read = stream.Read(tail, 0, probe);
             return Encoding.ASCII.GetString(tail, 0, read).Contains("moov", StringComparison.Ordinal);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return false;
-        }
-    }
-
-    private static bool IsFastStart(string path)
-    {
-        try
-        {
-            using var stream = File.OpenRead(path);
-            var buffer = new byte[Math.Min(512 * 1024, (int)Math.Min(stream.Length, int.MaxValue))];
-            var read = stream.Read(buffer, 0, buffer.Length);
-            var text = Encoding.ASCII.GetString(buffer, 0, read);
-            var moov = text.IndexOf("moov", StringComparison.Ordinal);
-            var mdat = text.IndexOf("mdat", StringComparison.Ordinal);
-            return moov >= 0 && mdat >= 0 && moov < mdat;
-        }
-        catch (Exception)
-        {
+            Console.Error.WriteLine($"moov確認に失敗: {ex.GetType().Name}: {ex.Message}");
             return false;
         }
     }

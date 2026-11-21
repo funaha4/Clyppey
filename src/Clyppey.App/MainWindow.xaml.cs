@@ -109,6 +109,18 @@ public partial class MainWindow : Window
     {
         if ((sender as FrameworkElement)?.Tag is ClipEntry clip)
         {
+            var answer = MessageBox.Show(
+                this,
+                Clyppey.App.Localization.Loc.T("Clips.ConfirmDelete"),
+                Clyppey.App.Localization.Loc.T("Clips.ConfirmDeleteTitle"),
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question,
+                MessageBoxResult.No);
+            if (answer != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
             _viewModel.DeleteClip(clip);
         }
     }

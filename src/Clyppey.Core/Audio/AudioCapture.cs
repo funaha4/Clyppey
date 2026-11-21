@@ -519,9 +519,16 @@ public sealed class AudioCapture : IDisposable
             // Clamping the window to 0 would slide the whole track later by that gap (and put the
             // two audio sources out of step with each other). Pad with silence instead so the
             // audio keeps its position on the timeline.
-            var leadSeconds = Math.Max(0, _startClock - startWall);
+            var windowSeconds = Math.Max(1.0, endWall - startWall);
+            var leadSeconds = Math.Min(Math.Max(0, _startClock - startWall), windowSeconds + 1.0);
             var fromSample = Math.Max(0, (long)((startWall - _startClock) * _format.SampleRate));
             var toSample = Math.Min(_nextSampleIndex, (long)((endWall - _startClock) * _format.SampleRate));
+            // Hard cap: a stale clock must never allocate gigabytes inside the lock.
+            var maxSamples = (long)((windowSeconds + 1.0) * _format.SampleRate);
+            if (toSample - fromSample > maxSamples)
+            {
+                toSample = fromSample + maxSamples;
+            }
             if (toSample - fromSample < _format.SampleRate / 4)
             {
                 return null; // Less than 250 ms - not worth muxing.

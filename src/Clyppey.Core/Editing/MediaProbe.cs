@@ -47,7 +47,7 @@ public static class MediaProbe
         }
 
         var (_, _, stderr) = await FfmpegExec
-            .RunAsync(ffmpegPath, new[] { "-hide_banner", "-i", path }, null, cancellationToken)
+            .RunAsync(ffmpegPath, new[] { "-nostdin", "-hide_banner", "-i", path }, null, cancellationToken)
             .ConfigureAwait(false);
 
         return Parse(stderr);

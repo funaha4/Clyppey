@@ -24,12 +24,23 @@ public static class ProcessRunner
             psi.ArgumentList.Add(arg);
         }
 
+        Process? process = null;
         try
         {
-            using var process = Process.Start(psi);
+            process = Process.Start(psi);
             if (process is null)
             {
                 return (false, "プロセスを開始できませんでした");
+            }
+
+            // Same promise as the capture path: never compete with a game for CPU scheduling.
+            try
+            {
+                process.PriorityClass = ProcessPriorityClass.BelowNormal;
+            }
+            catch (Exception)
+            {
+                // Priority is a hint; some sandboxes refuse it.
             }
 
             var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
@@ -61,11 +72,20 @@ public static class ProcessRunner
         }
         catch (OperationCanceledException)
         {
+            if (process is not null && !process.HasExited)
+            {
+                try { process.Kill(entireProcessTree: true); } catch (Exception) { }
+            }
+
             return (false, "キャンセル");
         }
         catch (Exception ex)
         {
             return (false, ex.Message);
+        }
+        finally
+        {
+            process?.Dispose();
         }
     }
 
@@ -94,6 +114,15 @@ public static class ProcessRunner
                 return null;
             }
 
+            try
+            {
+                process.PriorityClass = ProcessPriorityClass.BelowNormal;
+            }
+            catch (Exception)
+            {
+                // Priority is a hint; some sandboxes refuse it.
+            }
+
             _ = process.StandardError.ReadToEndAsync(cancellationToken);
             using var memory = new MemoryStream();
             var stdout = process.StandardOutput.BaseStream;
@@ -111,7 +140,7 @@ public static class ProcessRunner
 
             if (!process.WaitForExit(timeoutMs))
             {
-                try { process.Kill(); } catch (Exception) { }
+                try { process.Kill(entireProcessTree: true); } catch (Exception) { }
                 Log.Debug($"ffmpeg 出力取得: タイムアウト ({exe})");
                 return null;
             }

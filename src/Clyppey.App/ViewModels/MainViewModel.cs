@@ -608,7 +608,6 @@ public sealed class MainViewModel : ObservableObject
             _settings.MicrophoneVolume = clamped;
             Raise();
             Raise(nameof(MicrophoneVolumeText));
-        Raise(nameof(MicrophoneDelayText));
         }
     }
 
@@ -628,6 +627,7 @@ public sealed class MainViewModel : ObservableObject
 
             _settings.MicrophoneDelayMs = clamped;
             Raise();
+            Raise(nameof(MicrophoneDelayText));
         }
     }
 

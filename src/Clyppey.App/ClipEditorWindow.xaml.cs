@@ -1996,7 +1996,19 @@ public partial class ClipEditorWindow : Window
     /// <summary>Escape and the close button must not throw away a cut list without asking.</summary>
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
-        if (!_confirmedClose && !_busy && _cuts.Count > 0)
+        if (_busy)
+        {
+            MessageBox.Show(
+                this,
+                Loc.T("Trim.BusyClose"),
+                Loc.T("Trim.BusyTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            e.Cancel = true;
+            return;
+        }
+
+        if (!_confirmedClose && _cuts.Count > 0)
         {
             var answer = MessageBox.Show(
                 this,

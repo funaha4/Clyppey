@@ -35,7 +35,7 @@ public static class KeyframeIndex
     private static async Task<IReadOnlyList<double>> ScanAsync(
         string ffmpegPath, string path, bool hardware, CancellationToken cancellationToken)
     {
-        var args = new List<string> { "-hide_banner", "-nostats", "-v", "info" };
+        var args = new List<string> { "-nostdin", "-hide_banner", "-nostats", "-v", "info" };
 
         if (hardware)
         {
